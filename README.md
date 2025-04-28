@@ -1,280 +1,191 @@
-# How to Create an Effective README.md File
+# CV Anugrah Gemilang Backend
 
-A good README file is essential for any project. It's often the first thing people see when they discover your repository and serves as both documentation and a marketing tool for your project.
+Backend API service for CV Anugrah Gemilang's internal management system. This Express.js application provides APIs for customer management, transaction processing, gallon tracking, and dashboard analytics.
 
-## Why README Files Matter
-
-- **First Impression**: It's usually the first document users read
-- **Documentation**: Explains what your project does and how to use it
-- **Searchability**: Helps others find your project through keywords
-- **Collaboration**: Encourages others to contribute to your project
-- **Maintenance**: Makes it easier to remember how your project works when you revisit it later
-
-## README Structure
-
-A well-structured README typically includes these sections:
-
-### 1. Project Title and Description
-
-Start with a clear, concise title and a brief description (1-3 sentences) explaining what your project does.
-
-```markdown
-# Project Name
-
-A brief description of what this project does and who it's for.
-```
-
-### 2. Badges (Optional)
-
-Badges show the status of your project (build status, version, etc.).
-
-```markdown
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
-![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)
-```
-
-### 3. Visual Demo (Optional)
-
-If applicable, include screenshots, GIFs, or videos showing your project in action.
-
-```markdown
-## Demo
-
-![Demo](screenshot.png)
-```
-
-### 4. Features
-
-List the key features of your project to highlight its capabilities.
-
-```markdown
 ## Features
 
-- Feature 1
-- Feature 2
-- Feature 3
-```
+- 🔐 **JWT Authentication & Role-based Access Control**
+- 👥 **Customer Management System**
+- 💰 **Transaction & Payment Processing**
+- 📊 **Dashboard Analytics**
+- 🧾 **Debt Management & Payment Tracking**
+- 🚰 **Gallon Movement & Stock Tracking**
+- 🔍 **Global Search Functionality**
+- 📝 **Audit Logging**
 
-### 5. Technology Stack
+## Technology Stack
 
-List the technologies, frameworks, and libraries used in your project.
+- **Framework**: Express.js
+- **Database**: MySQL
+- **Authentication**: JWT (JSON Web Tokens)
+- **Validation**: Joi
+- **Password Hashing**: bcrypt
+- **Date Management**: moment-timezone
 
-```markdown
-## Built With
+## Prerequisites
 
-- Node.js
-- Express
-- MySQL
-- JWT
-```
+- Node.js v14+ 
+- MySQL 5.7+
+- npm or yarn
 
-### 6. Installation & Setup
-
-Detailed instructions on how to install and set up your project.
-
-```markdown
 ## Installation
 
-1. Clone the repository
-   ```bash
-   git clone https://github.com/username/project.git
-   ```
-2. Install dependencies
-   ```bash
-   npm install
-   ```
-3. Configure environment variables
-   ```
-   Create a .env file with:
-   DB_HOST=localhost
-   DB_USER=user
-   DB_PASS=password
-   ```
-4. Start the server
-   ```bash
-   npm start
-   ```
+1. Clone the repository:
+
+```bash
+git clone https://github.com/yourusername/cv-anugrah-backend.git
+cd cv-anugrah-backend
 ```
 
-### 7. Usage
+2. Install dependencies:
 
-Explain how to use your project with examples.
-
-```markdown
-## Usage
-
-```javascript
-// Example code demonstrating how to use your project
-const api = require('your-project');
-api.doSomething();
-```
+```bash
+npm install
 ```
 
-### 8. API Documentation
-
-If your project has an API, provide documentation for the endpoints.
-
-```markdown
-## API Reference
-
-#### Get all items
+3. Create a `.env` file in the root directory with the following variables:
 
 ```
-GET /api/items
+PORT=5000
+HOST=localhost
+USER=your_database_user
+PASSWORD=your_database_password
+DATABASE=your_database_name
+JWT_SECRET=your_jwt_secret_key
+JWT_REFRESH_SECRET=your_jwt_refresh_secret_key
 ```
 
-| Parameter | Type     | Description                |
-| :-------- | :------- | :------------------------- |
-| `api_key` | `string` | **Required**. Your API key |
+4. Start the development server:
 
-#### Get item
-
-```
-GET /api/items/${id}
-```
+```bash
+npm run start-dev
 ```
 
-### 9. Project Structure
+## API Endpoints
 
-Show the organization of your project's files and directories.
+### Authentication
+- `POST /api/auth/register` - Register new user (Admin only)
+- `POST /api/auth/login` - Login and get access token
+- `POST /api/auth/refresh-token` - Refresh access token
+- `POST /api/auth/logout` - Logout and invalidate tokens
 
-```markdown
+### Customers
+- `GET /api/customers` - Get all customers
+- `GET /api/customers/:id` - Get customer by ID
+- `POST /api/customers` - Add new customer
+- `PUT /api/customers/:id` - Update customer
+- `DELETE /api/customers/:id` - Delete customer
+
+### Transactions
+- `GET /api/transactions` - Get all transactions
+- `GET /api/transactions/:id` - Get transaction by ID
+- `GET /api/transactions/customer/:id` - Get transactions by customer ID
+- `GET /api/transactions/filter` - Filter transactions
+- `POST /api/transactions` - Add new transaction
+- `DELETE /api/transactions/:id` - Delete transaction (soft delete)
+- `PUT /api/transactions/restore/:id` - Restore deleted transaction
+
+### Payment Logs
+- `GET /api/paymentlogs` - Get all payment logs
+- `GET /api/paymentlogs/:id` - Get payment log by ID
+- `GET /api/paymentlogs/transaction/:id` - Get payment logs by transaction ID
+- `GET /api/paymentlogs/getdebts` - Get debts with various filters
+- `POST /api/paymentlogs` - Add payment log
+- `POST /api/paymentlogs/paydebt` - Record debt payment
+
+### Customer Balance
+- `GET /api/customerbalance` - Get all customer balances
+- `GET /api/customerbalance/:id` - Get customer balance by ID
+- `POST /api/customerbalance` - Add customer balance
+- `PUT /api/customerbalance` - Update customer balance
+
+### Gallon Management
+- `GET /api/gallon/stock` - Get all gallon stock recap
+- `GET /api/gallon/stock/:customer_id` - Get gallon stock by customer ID
+- `GET /api/gallon/stock/filter` - Filter gallon stock records
+- `GET /api/gallon/price/:customer_id` - Get gallon price by customer ID
+
+### Gallon Movements
+- `GET /api/gallonmovements` - Get all gallon movements
+- `GET /api/gallonmovements/:customer_id` - Get gallon movements by customer ID
+
+### Dashboard
+- `GET /api/dashboard/summary` - Get dashboard summary
+- `GET /api/dashboard/income-summary` - Get income summary
+- `GET /api/dashboard/gallon-summary` - Get gallon summary
+- `GET /api/dashboard/active-customers` - Get active customers count
+- `GET /api/dashboard/debt-status` - Get debt status summary
+- `GET /api/dashboard/today-activity` - Get today's activities
+
+### Search
+- `GET /api/search` - Global search functionality
+
+### User Management
+- `GET /api/user` - Get all users (Admin only)
+- `DELETE /api/user` - Delete user (Admin only)
+
+### Audit Logs
+- `GET /api/auditlogs` - Get audit logs (Admin only)
+
 ## Project Structure
 
 ```
-project/
-├── src/
-│   ├── controllers/
-│   ├── models/
-│   ├── routes/
-│   └── server.js
-├── tests/
-├── .env.example
-├── package.json
-└── README.md
-```
-```
-
-### 10. Contributing Guidelines
-
-Instructions for how others can contribute to your project.
-
-```markdown
-## Contributing
-
-Contributions are always welcome!
-
-1. Fork the repository
-2. Create a new branch
-3. Make your changes
-4. Submit a pull request
+src/
+├── config/           # Configuration files
+│   └── db.js         # Database connection
+├── controllers/      # Request handlers
+├── helpers/          # Helper functions
+├── middlewares/      # Custom middleware
+├── models/           # Database models
+├── routes/           # API routes
+├── services/         # Business logic
+├── validators/       # Request validation schemas
+└── server.js         # Application entry point
 ```
 
-### 11. License
+## Authentication & Authorization
 
-Include license information.
+This API uses JWT for authentication. Include the token in your requests:
 
-```markdown
-## License
-
-[MIT](https://choosealicense.com/licenses/mit/)
+```
+Authorization: Bearer your_access_token
 ```
 
-### 12. Acknowledgments
+Three role levels are implemented:
+- `Admin`: Full access to all endpoints
+- `Editor`: Limited administrative access
+- `Driver`: Limited read-only access to specific endpoints
 
-Credit other projects, resources, or people that helped you.
+## Error Handling
 
-```markdown
-## Acknowledgments
+The API returns consistent error responses:
 
-- Hat tip to anyone whose code was used
-- Inspiration
-- etc.
-```
-
-## Markdown Tips
-
-### Headers
-
-```markdown
-# H1
-## H2
-### H3
-```
-
-### Emphasis
-
-```markdown
-*italic* or _italic_
-**bold** or __bold__
-```
-
-### Lists
-
-```markdown
-1. Ordered item 1
-2. Ordered item 2
-
-- Unordered item
-- Another unordered item
-```
-
-### Links
-
-```markdown
-[Link text](https://www.example.com)
-```
-
-### Images
-
-```markdown
-![Alt text](path/to/image.jpg)
-```
-
-### Code
-
-````markdown
-```javascript
-// This is a code block
-function example() {
-  return "Hello World";
+```json
+{
+  "status": "error",
+  "message": "Error description",
+  "error": "Additional error details (when available)"
 }
 ```
-````
 
-### Tables
+## Audit Logging
 
-```markdown
-| Header 1 | Header 2 |
-| -------- | -------- |
-| Cell 1   | Cell 2   |
-| Cell 3   | Cell 4   |
-```
+All create, update, and delete operations are logged in the `audit_logs` table, including:
+- User ID and role
+- Action performed
+- Endpoint accessed
+- Request data
+- Previous data state (for updates/deletes)
+- IP address
 
-## Common Mistakes to Avoid
+## License
 
-1. **Too brief**: Not providing enough information
-2. **Too verbose**: Making it so long that nobody reads it
-3. **No examples**: Not showing how to use your project
-4. **Outdated information**: Not updating the README when your project changes
-5. **Broken links/images**: Not checking that all references work
-6. **Lack of structure**: Not organizing information logically
-7. **Poor formatting**: Not using Markdown effectively
+[MIT](LICENSE)
 
-## README Maintenance
+## Contributors
 
-Keep your README updated:
+- Your Name - Initial work - [Your GitHub](https://github.com/yourusername)
 
-- Update when significant changes are made to the project
-- Check regularly for outdated information
-- Revise based on common questions from users
-- Consider asking others to review your README for clarity
+## Acknowledgments
 
-## Tools for Creating READMEs
-
-- [readme.so](https://readme.so/) - Visual README editor
-- [GitHub's README templates](https://github.com/othneildrew/Best-README-Template)
-- [Shields.io](https://shields.io/) - For creating badges
-- [Carbon](https://carbon.now.sh/) - For creating code screenshots
-
-Remember, a good README evolves with your project. Regularly revisit and update it as your project grows and changes.
+- Mention any libraries, tools, or people you want to acknowledge
