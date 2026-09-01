@@ -184,7 +184,7 @@ export const deleteTransaction = async (req, res) => {
     }
 
     // Panggil service untuk proses delete
-    const result = await TransactionsService.deleteTransaction(id, req);
+    await TransactionsService.deleteTransaction(id, req);
 
     return successResponse(
       res,
@@ -219,10 +219,7 @@ export const restoreTransaction = async (req, res) => {
       ]);
     }
 
-    const result = await TransactionsService.restoreTransaction(
-      transaction_id,
-      req
-    );
+    await TransactionsService.restoreTransaction(transaction_id, req);
 
     return successResponse(
       res,

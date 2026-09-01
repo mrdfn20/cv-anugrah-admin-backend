@@ -20,7 +20,7 @@ const authMiddleware = (req, res, next) => {
     req.user = decoded; // ✅ Tambahkan user ke `req` agar bisa diakses di endpoint lain
 
     next(); // ✅ Lanjut ke middleware/endpoint berikutnya
-  } catch (error) {
+  } catch {
     return res.status(403).json({ message: 'Forbidden: Invalid token' });
   }
 };
