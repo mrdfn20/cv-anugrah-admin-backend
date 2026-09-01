@@ -5,107 +5,132 @@ const PaymentLogs = {
   /**
    * Mendapatkan hutang berdasarkan transaction_id
    * @param {Number} transaction_id - ID transaksi yang akan dibayar
+   * @param {import('mysql2/promise').PoolConnection} [conn] - Koneksi transaction opsional.
    * @returns {Promise<Object>} - Hasil pembayaran
    */
-  getDebtTransactionById: async (transaction_id) => {
+  getDebtTransactionById: async (transaction_id, conn) => {
     const query = `
-      SELECT t.id AS transaction_id, t.customer_id, t.transaction_date, 
+      SELECT t.id AS transaction_id, t.customer_id, t.transaction_date,
              t.total_price, COALESCE(SUM(pl.amount_paid), 0) AS total_paid
       FROM transactions t
       LEFT JOIN payment_logs pl ON t.id = pl.transaction_id AND pl.deleted_at IS NULL
       WHERE t.id = ? AND t.transaction_type = 'Hutang' AND t.deleted_at IS NULL
       GROUP BY t.id, t.customer_id, t.transaction_date, t.total_price
     `;
-    const [results] = await dbConnection
-      .promise()
-      .execute(query, [transaction_id]);
+    const executor = conn || dbConnection.promise();
+    const [results] = await executor.execute(query, [transaction_id]);
     return results[0] || null;
   },
 
   /**
    * Mengambil daftar hutang berdasarkan filter tertentu
+   * `page`/`limit` OPSIONAL - kalau gak dikirim, balikin SEMUA hutang yang cocok filter
+   * (perilaku lama) sbg array biasa. Kalau dikirim, return `{ data, total }`.
    * @param {Object} params - Filter yang digunakan (transaction_id, customer_id, dll.)
-   * @param {Function} callback - Callback function untuk menangani hasil query
    */
   getDebtsByfilter: async (
     transaction_id,
     customer_id,
+    customer_name,
     startDate,
     endDate,
     status,
     sortBy,
-    sortOrder
+    sortOrder,
+    page,
+    limit
   ) => {
-    let query = `
-      SELECT 
+    const whereClauses = [`t.transaction_type = 'Hutang'`, 't.deleted_at IS NULL'];
+    const queryParams = [];
+
+    if (transaction_id) {
+      whereClauses.push('t.id = ?');
+      queryParams.push(transaction_id);
+    }
+
+    if (customer_id) {
+      whereClauses.push('t.customer_id = ?');
+      queryParams.push(customer_id);
+    }
+
+    if (customer_name) {
+      whereClauses.push('c.customer_name LIKE ?');
+      queryParams.push(`%${customer_name}%`);
+    }
+
+    if (startDate && endDate) {
+      whereClauses.push('DATE(t.transaction_date) BETWEEN ? AND ?');
+      queryParams.push(startDate, endDate);
+    } else if (startDate) {
+      whereClauses.push('DATE(t.transaction_date) >= ?');
+      queryParams.push(startDate);
+    } else if (endDate) {
+      whereClauses.push('DATE(t.transaction_date) <= ?');
+      queryParams.push(endDate);
+    }
+
+    const havingClause =
+      status === 'Lunas'
+        ? ' HAVING remaining_debt = 0'
+        : status === 'Belum Lunas'
+          ? ' HAVING remaining_debt > 0'
+          : '';
+
+    // Inti query (SELECT kolom + GROUP BY + HAVING) dipakai bareng buat query utama & COUNT
+    // (COUNT wajib bungkus subquery krn ada GROUP BY/HAVING - gak bisa COUNT(*) biasa).
+    const coreSelect = `
+      SELECT
         t.transaction_date,
         t.id AS transaction_id,
         t.customer_id,
         t.total_price,
         COALESCE(SUM(pl.amount_paid), 0) AS total_paid,
         (t.total_price - COALESCE(SUM(pl.amount_paid), 0)) AS remaining_debt,
-        CASE 
-          WHEN (t.total_price - COALESCE(SUM(pl.amount_paid), 0)) = 0 THEN 'Lunas' 
-          ELSE 'Belum Lunas' 
+        CASE
+          WHEN (t.total_price - COALESCE(SUM(pl.amount_paid), 0)) = 0 THEN 'Lunas'
+          ELSE 'Belum Lunas'
         END AS status_hutang
       FROM transactions t
+      JOIN customers c ON t.customer_id = c.id
       LEFT JOIN payment_logs pl ON t.id = pl.transaction_id AND pl.deleted_at IS NULL
-      WHERE t.transaction_type = 'Hutang' AND t.deleted_at IS NULL
+      WHERE ${whereClauses.join(' AND ')}
+      GROUP BY t.id, t.customer_id, t.total_price${havingClause}
     `;
 
-    const queryParams = [];
+    let orderByClause = ' ORDER BY t.transaction_date';
+    if (sortBy === 'remaining_debt') {
+      orderByClause = ' ORDER BY remaining_debt';
+    }
+    orderByClause += sortOrder === 'DESC' ? ' DESC' : ' ASC';
 
-    if (transaction_id) {
-      query += ` AND t.id = ?`;
-      queryParams.push(transaction_id);
+    let query = coreSelect + orderByClause;
+    const selectParams = [...queryParams];
+
+    let total = null;
+    if (limit) {
+      const countQuery = `SELECT COUNT(*) AS total FROM (${coreSelect}) AS sub`;
+      const [countResult] = await dbConnection
+        .promise()
+        .execute(countQuery, queryParams);
+      total = countResult[0].total;
+
+      const safePage = Math.max(parseInt(page) || 1, 1);
+      const safeLimit = Math.max(parseInt(limit) || 15, 1);
+      const offset = (safePage - 1) * safeLimit;
+      query += ' LIMIT ? OFFSET ?';
+      selectParams.push(safeLimit, offset);
     }
 
-    if (customer_id) {
-      query += ` AND t.customer_id = ?`;
-      queryParams.push(customer_id);
-    }
+    const [results] = await dbConnection.promise().execute(query, selectParams);
 
-    if (startDate && endDate) {
-      query += ` AND DATE(t.transaction_date) BETWEEN ? AND ?`;
-      queryParams.push(startDate, endDate);
-    } else if (startDate) {
-      query += ` AND DATE(t.transaction_date) >= ?`;
-      queryParams.push(startDate);
-    } else if (endDate) {
-      query += ` AND DATE(t.transaction_date) <= ?`;
-      queryParams.push(endDate);
-    }
-
-    query += ` GROUP BY t.id, t.customer_id, t.total_price`;
-
-    if (status === 'Lunas') {
-      query += ` HAVING remaining_debt = 0`;
-    } else if (status === 'Belum Lunas') {
-      query += ` HAVING remaining_debt > 0`;
-    }
-
-    if (sortBy === 'transaction_date') {
-      query += ` ORDER BY t.transaction_date`;
-    } else if (sortBy === 'remaining_debt') {
-      query += ` ORDER BY remaining_debt`;
-    } else {
-      query += ` ORDER BY t.transaction_date`; // default
-    }
-
-    if (sortOrder === 'DESC') {
-      query += ` DESC`;
-    } else {
-      query += ` ASC`; // default
-    }
-
-    const [results] = await dbConnection.promise().execute(query, queryParams);
-
-    return results.map((t) => ({
+    const mapped = results.map((t) => ({
       ...t,
       transaction_date: moment(t.transaction_date)
-        .tz('Asia/Jakarta') 
+        .tz('Asia/Jakarta')
         .format('YYYY-MM-DD'),
     }));
+
+    return limit ? { data: mapped, total } : mapped;
   },
 
   /**
@@ -141,28 +166,29 @@ const PaymentLogs = {
   /**
    * Menambahkan catatan pembayaran hutang
    * @param {Object} params - Data pembayaran yang akan disimpan
+   * @param {import('mysql2/promise').PoolConnection} [conn] - Koneksi transaction opsional.
    */
   insertPaymentLogs: async (
     transaction_id,
     customer_id,
     owe_date,
     payment_date,
-    amount_paid
+    amount_paid,
+    conn
   ) => {
     const queryInsert = `
       INSERT INTO payment_logs (transaction_id, customer_id, owe_date, payment_date, amount_paid)
       VALUES (?, ?, ?, ?, ?)
     `;
 
-    const [results] = await dbConnection
-      .promise()
-      .execute(queryInsert, [
-        transaction_id,
-        customer_id,
-        owe_date || new Date().toISOString().slice(0, 10),
-        payment_date || null,
-        amount_paid || 0,
-      ]);
+    const executor = conn || dbConnection.promise();
+    const [results] = await executor.execute(queryInsert, [
+      transaction_id,
+      customer_id,
+      owe_date || new Date().toISOString().slice(0, 10),
+      payment_date || null,
+      amount_paid || 0,
+    ]);
 
     return results;
   },

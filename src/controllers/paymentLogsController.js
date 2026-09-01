@@ -1,5 +1,12 @@
 import PaymentLogsService from '../services/paymentLogService.js';
 import moment from 'moment-timezone';
+import {
+  successResponse,
+  validationErrorResponse,
+  notFoundErrorResponse,
+  internalErrorResponse,
+  createPaginationMeta,
+} from '../helpers/responseHelper.js';
 
 /**
  * Membayar hutang pelanggan berdasarkan transaksi ID.
@@ -11,7 +18,7 @@ export const payDebt = async (req, res) => {
     const { transaction_id, payment_date, amount_paid } = req.body;
 
     if (!transaction_id || !amount_paid || amount_paid <= 0) {
-      return res.status(400).json({ error: 'Invalid payment data' });
+      return validationErrorResponse(res, ['Invalid payment data']);
     }
 
     const results = await PaymentLogsService.payDebt(req, {
@@ -20,24 +27,19 @@ export const payDebt = async (req, res) => {
       amount_paid,
     });
 
-    if (!results || results.length === 0) {
-      return res.status(404).json({ message: 'No payment logs found' });
-    }
-    if (results.message === 'Debt is already fully paid.') {
-      return res
-        .status(400)
-        .json({ message: results.message, transactionId: transaction_id });
+    return successResponse(res, 'Payment recorded successfully', results, null, 201);
+  } catch (error) {
+    console.error('[PAY DEBT ERROR]', error);
+
+    if (error.message === 'No debt found for this transaction.') {
+      return notFoundErrorResponse(res, 'Debt');
     }
 
-    if (results.message === 'No debt found for this transaction.') {
-      return res
-        .status(404)
-        .json({ message: results.message, transactionId: transaction_id });
+    if (error.message === 'Debt is already fully paid.') {
+      return validationErrorResponse(res, [error.message]);
     }
 
-    return res.status(201).json(results);
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return internalErrorResponse(res, 'Gagal memproses pembayaran hutang', error);
   }
 };
 
@@ -51,63 +53,88 @@ export const getDebtsByfilter = async (req, res) => {
     let {
       transaction_id,
       customer_id,
+      customer_name,
       startDate,
       endDate,
       status,
       sortBy,
       sortOrder,
+      page,
+      limit,
     } = req.query;
+
+    const validationErrors = [];
 
     if (transaction_id) {
       transaction_id = parseInt(transaction_id);
-      if (isNaN(transaction_id))
-        return res.status(400).json({ error: 'Invalid transaction ID' });
+      if (isNaN(transaction_id)) validationErrors.push('Invalid transaction ID');
     }
 
     if (customer_id) {
       customer_id = parseInt(customer_id);
-      if (isNaN(customer_id))
-        return res.status(400).json({ error: 'Invalid customer ID' });
+      if (isNaN(customer_id)) validationErrors.push('Invalid customer ID');
     }
 
     if (
       (startDate && !moment(startDate, 'YYYY-MM-DD', true).isValid()) ||
       (endDate && !moment(endDate, 'YYYY-MM-DD', true).isValid())
     ) {
-      return res
-        .status(400)
-        .json({ error: 'Format tanggal tidak valid. Gunakan YYYY-MM-DD' });
+      validationErrors.push('Format tanggal tidak valid. Gunakan YYYY-MM-DD');
     }
 
     if (status && status !== 'Lunas' && status !== 'Belum Lunas') {
-      return res.status(400).json({ error: 'Invalid status' });
+      validationErrors.push('Invalid status');
     }
 
     const allowedSortColumns = ['transaction_date', 'remaining_debt'];
     if (sortBy && !allowedSortColumns.includes(sortBy)) {
-      return res.status(400).json({ error: 'Invalid sortBy parameter' });
+      validationErrors.push('Invalid sortBy parameter');
     }
 
     const allowedSortOrder = ['ASC', 'DESC'];
     if (sortOrder && !allowedSortOrder.includes(sortOrder.toUpperCase())) {
-      return res.status(400).json({ error: 'Invalid sortOrder parameter' });
+      validationErrors.push('Invalid sortOrder parameter');
+    }
+
+    // page/limit OPSIONAL - kalau gak dikirim, balikin semua hutang yang cocok filter
+    if (page && (isNaN(parseInt(page)) || parseInt(page) < 1)) {
+      validationErrors.push('page harus angka >= 1');
+    }
+    if (limit && (isNaN(parseInt(limit)) || parseInt(limit) < 1)) {
+      validationErrors.push('limit harus angka >= 1');
+    }
+
+    if (validationErrors.length > 0) {
+      return validationErrorResponse(res, validationErrors);
     }
 
     const results = await PaymentLogsService.getDebtsByfilter(
       transaction_id,
       customer_id,
+      customer_name,
       startDate,
       endDate,
       status,
       sortBy,
-      sortOrder
+      sortOrder,
+      page,
+      limit
     );
-    if (!results || results.length === 0) {
-      return res.status(404).json({ message: 'No debts found' });
+
+    const isPaginated = limit && results && !Array.isArray(results);
+    const debts = isPaginated ? results.data : results;
+    const meta = isPaginated
+      ? createPaginationMeta(results.total, parseInt(page) || 1, parseInt(limit))
+      : null;
+
+    if (!debts || debts.length === 0) {
+      return successResponse(res, 'No debts found', [], meta, 200);
     }
-    return res.status(200).json(results);
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
+
+    return successResponse(res, 'Debts retrieved successfully', debts, meta, 200);
+  } catch (error) {
+    console.error('[GET DEBTS BY FILTER ERROR]', error);
+    return internalErrorResponse(res, 'Gagal mengambil data hutang', error);
   }
 };
 
@@ -140,14 +167,19 @@ export const addPaymentLogs = async (req, res) => {
     );
 
     if (!results || results.length === 0) {
-      return res.status(404).json({ message: 'No payment logs found' });
+      return notFoundErrorResponse(res, 'Payment log');
     }
-    return res.status(201).json({
-      message: 'Payment Log added successfully!',
-      paymentLogId: results.insertId,
-    });
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
+
+    return successResponse(
+      res,
+      'Payment log added successfully',
+      { paymentLogId: results.insertId },
+      null,
+      201
+    );
+  } catch (error) {
+    console.error('[ADD PAYMENT LOG ERROR]', error);
+    return internalErrorResponse(res, 'Gagal menambahkan payment log', error);
   }
 };
 
@@ -160,10 +192,13 @@ export const getAllPaymentLogs = async (req, res) => {
   try {
     const results = await PaymentLogsService.getAllPaymentLogs();
     if (!results || results.length === 0) {
-      return res.status(404).json({ message: 'No payment logs found' });
+      return successResponse(res, 'No payment logs found', [], null, 200);
     }
-    return res.status(200).json(results);
-  } catch (err) {}
+    return successResponse(res, 'Payment logs retrieved successfully', results, null, 200);
+  } catch (error) {
+    console.error('[GET ALL PAYMENT LOGS ERROR]', error);
+    return internalErrorResponse(res, 'Gagal mengambil data payment logs', error);
+  }
 };
 
 /**
@@ -174,18 +209,20 @@ export const getAllPaymentLogs = async (req, res) => {
 export const getPaymentLogById = async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    if (isNaN(id))
-      return res.status(400).json({ error: 'Invalid payment log ID' });
+    if (isNaN(id)) {
+      return validationErrorResponse(res, ['Invalid payment log ID']);
+    }
 
     const results = await PaymentLogsService.getPaymentLogById(id);
 
     if (!results || results.length === 0) {
-      return res.status(404).json({ message: 'No payment logs found' });
+      return notFoundErrorResponse(res, 'Payment log');
     }
 
-    return res.status(200).json(results);
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return successResponse(res, 'Payment log retrieved successfully', results, null, 200);
+  } catch (error) {
+    console.error('[GET PAYMENT LOG BY ID ERROR]', error);
+    return internalErrorResponse(res, 'Gagal mengambil data payment log', error);
   }
 };
 
@@ -199,20 +236,27 @@ export const getPaymentLogByTransactionId = async (req, res) => {
     const transaction_id = req.params.id;
 
     if (!transaction_id || isNaN(transaction_id)) {
-      return res.status(400).json({ error: 'Invalid transaction ID' });
+      return validationErrorResponse(res, ['Invalid transaction ID']);
     }
 
     const results = await PaymentLogsService.getPaymentLogByTransactionId(
       transaction_id
     );
 
-    if (!results || results.length === 0) {
-      return res.status(404).json({ message: 'No payment logs found' });
-    }
-
-    res.status(200).json(results);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    // Belum ada riwayat pembayaran itu kondisi normal (transaksi hutang baru),
+    // bukan error - balas array kosong, bukan 404.
+    return successResponse(
+      res,
+      results && results.length > 0
+        ? 'Payment logs retrieved successfully'
+        : 'No payment logs found',
+      results || [],
+      null,
+      200
+    );
+  } catch (error) {
+    console.error('[GET PAYMENT LOG BY TRANSACTION ID ERROR]', error);
+    return internalErrorResponse(res, 'Gagal mengambil riwayat pembayaran', error);
   }
 };
 
@@ -226,7 +270,7 @@ export const getDeletedPaymentLogByTransactionId = async (req, res) => {
     const transaction_id = req.params.id;
 
     if (!transaction_id || isNaN(transaction_id)) {
-      return res.status(400).json({ error: 'Invalid transaction ID' });
+      return validationErrorResponse(res, ['Invalid transaction ID']);
     }
 
     const results =
@@ -235,11 +279,18 @@ export const getDeletedPaymentLogByTransactionId = async (req, res) => {
       );
 
     if (!results || results.length === 0) {
-      return res.status(404).json({ message: 'No deleted payment logs found' });
+      return successResponse(res, 'No deleted payment logs found', [], null, 200);
     }
 
-    res.status(200).json(results);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    return successResponse(
+      res,
+      'Deleted payment logs retrieved successfully',
+      results,
+      null,
+      200
+    );
+  } catch (error) {
+    console.error('[GET DELETED PAYMENT LOG ERROR]', error);
+    return internalErrorResponse(res, 'Gagal mengambil data payment log terhapus', error);
   }
 };

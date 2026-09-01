@@ -23,7 +23,9 @@ class User {
   }
 
   static async getAllUsers() {
-    const query = 'SELECT * FROM users';
+    // Jangan SELECT * - kolom password (bcrypt hash) tidak boleh ikut terbawa
+    // ke response API manapun.
+    const query = 'SELECT id, username, role, created_at FROM users';
     const [results] = await dbConnection.promise().execute(query);
     return results;
   }

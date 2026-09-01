@@ -51,13 +51,13 @@ class AuthService {
 
       // Generate JWT token dengan payload id & role
       const accessToken = jwt.sign(
-        { id: user.id, role: user.role },
+        { id: user.id, username: user.username, role: user.role },
         process.env.JWT_SECRET,
         { expiresIn: '1h' } // ✅ Token berlaku 1 jam
       );
 
       const refreshToken = jwt.sign(
-        { id: user.id, role: user.role },
+        { id: user.id, username: user.username, role: user.role },
         process.env.JWT_REFRESH_SECRET,
         { expiresIn: '3d' }
       );

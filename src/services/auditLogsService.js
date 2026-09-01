@@ -1,8 +1,8 @@
 import AuditLogsModel from '../models/auditLogsModel.js';
 
 class AuditLogsService {
-  static async getAllLogs() {
-    return await AuditLogsModel.getAllLogs();
+  static async getLogs({ search, page, limit } = {}) {
+    return await AuditLogsModel.getLogs({ search, page, limit });
   }
 }
 

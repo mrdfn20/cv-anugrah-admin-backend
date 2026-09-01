@@ -11,5 +11,5 @@ router.get(
   roleMiddleware(['Admin']),
   AuditLogController.getLogs
 );
-  
+
 export default router;

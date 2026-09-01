@@ -6,7 +6,14 @@ const Customer = {
    * @param {Function} callback - Callback function untuk menangani hasil query
    */
   getAllCustomers: (callback) => {
-    const query = 'SELECT * FROM customers';
+    const query = `SELECT cst.*, 
+                    gp.price, 
+                    sr.sub_region_name, 
+                    r.region_name
+                    FROM customers cst
+                    LEFT JOIN gallon_prices gp ON cst.gallon_price_id = gp.id
+                    LEFT JOIN sub_regions sr ON cst.sub_region_id = sr.id
+                    LEFT JOIN regions r ON sr.region_id = r.id`;
     dbConnection.query(query, (err, results) => {
       if (err) return callback(err, null);
       return callback(null, results);
@@ -20,17 +27,33 @@ const Customer = {
    */
 
   getCustomerById: async (id) => {
-    const query = `SELECT * FROM customers WHERE id = ?`;
+    const query = `SELECT cst.*, 
+                    gp.price, 
+                    sr.sub_region_name, 
+                    r.region_name
+                    FROM customers cst
+                    LEFT JOIN gallon_prices gp ON cst.gallon_price_id = gp.id
+                    LEFT JOIN sub_regions sr ON cst.sub_region_id = sr.id
+                    LEFT JOIN regions r ON sr.region_id = r.id
+                    WHERE cst.id = ?`;
     const [results] = await dbConnection.promise().execute(query, [id]);
     return results[0];
   },
 
   getCustomerByIdWithCallback: (id, callback) => {
-    const query = `SELECT * FROM customers WHERE id = ?`;
+    const query = `SELECT cst.*, 
+                    gp.price, 
+                    sr.sub_region_name, 
+                    r.region_name
+                    FROM customers cst
+                    LEFT JOIN gallon_prices gp ON cst.gallon_price_id = gp.id
+                    LEFT JOIN sub_regions sr ON cst.sub_region_id = sr.id
+                    LEFT JOIN regions r ON sr.region_id = r.id
+                    WHERE cst.id = ?`;
     dbConnection.query(query, [id], (err, results) => {
       if (err) return callback(err, null);
       if (results.length === 0) return callback(null, null); // Jika tidak ada hasil
-      return callback(null, results[0]); // Kembalikan objek pelanggan
+      return callback(null, results); // Kembalikan objek pelanggan
     });
   },
 

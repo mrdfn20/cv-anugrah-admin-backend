@@ -12,7 +12,7 @@ class DashboardController {
       );
     } catch (error) {
       console.error('Error in getSummary:', error.message);
-      return errorResponse(res, error);
+      return errorResponse(res, 'Gagal mengambil dashboard summary', error.message, 500);
     }
   }
 
@@ -26,7 +26,7 @@ class DashboardController {
       );
     } catch (error) {
       console.error('Error in getIncomeSummary:', error.message);
-      return errorResponse(res, error);
+      return errorResponse(res, 'Gagal mengambil income summary', error.message, 500);
     }
   }
 
@@ -40,7 +40,7 @@ class DashboardController {
       );
     } catch (error) {
       console.error('Error in  get total transactions:', error.message);
-      return errorResponse(res, error);
+      return errorResponse(res, 'Gagal mengambil total transactions', error.message, 500);
     }
   }
 
@@ -54,7 +54,7 @@ class DashboardController {
       );
     } catch (error) {
       console.error('Error in  get total income:', error.message);
-      return errorResponse(res, error);
+      return errorResponse(res, 'Gagal mengambil total income', error.message, 500);
     }
   }
 
@@ -68,7 +68,7 @@ class DashboardController {
       );
     } catch (error) {
       console.error('Error in  get total customers:', error.message);
-      return errorResponse(res, error);
+      return errorResponse(res, 'Gagal mengambil total customers', error.message, 500);
     }
   }
 
@@ -78,7 +78,7 @@ class DashboardController {
       return successResponse(res, 'total debt fetched successfully', totalDebt);
     } catch (error) {
       console.error('Error in  get total debt:', error.message);
-      return errorResponse(res, error);
+      return errorResponse(res, 'Gagal mengambil total debt', error.message, 500);
     }
   }
 
@@ -92,7 +92,7 @@ class DashboardController {
       );
     } catch (error) {
       console.error('Error in getGallonSummary:', error.message);
-      return errorResponse(res, error);
+      return errorResponse(res, 'Gagal mengambil gallon summary', error.message, 500);
     }
   }
 
@@ -106,7 +106,7 @@ class DashboardController {
       );
     } catch (error) {
       console.error('Error in getActiveCustomers:', error.message);
-      return errorResponse(res, error);
+      return errorResponse(res, 'Gagal mengambil active customers', error.message, 500);
     }
   }
 
@@ -120,7 +120,7 @@ class DashboardController {
       );
     } catch (error) {
       console.error('Error in getDebtStatus:', error.message);
-      return errorResponse(res, error);
+      return errorResponse(res, 'Gagal mengambil debt status', error.message, 500);
     }
   }
 
@@ -134,7 +134,7 @@ class DashboardController {
       );
     } catch (error) {
       console.error('Error in getTodayActivity:', error.message);
-      return errorResponse(res, error);
+      return errorResponse(res, "Gagal mengambil today's activity", error.message, 500);
     }
   }
 }

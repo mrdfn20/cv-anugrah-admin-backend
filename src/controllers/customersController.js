@@ -1,140 +1,194 @@
+// src/controllers/customersController.js
 import customerSchema from '../validators/customersValidators.js';
 import CustomersService from '../services/customersService.js';
+import {
+  successResponse,
+  validationErrorResponse,
+  notFoundErrorResponse,
+  internalErrorResponse,
+} from '../helpers/responseHelper.js';
 
 /**
- * Mengambil semua pelanggan dari database.
- * @param {Object} req - Request dari client.
- * @param {Object} res - Response dari server.
+ * Mengambil semua pelanggan dari database
+ * @param {Object} req - Request dari client
+ * @param {Object} res - Response dari server
  */
 export const getAllCustomers = (req, res) => {
   CustomersService.getAllCustomers((err, results) => {
     if (err) {
-      return res.status(500).json({ error: err.message });
+      console.error('[GET ALL CUSTOMERS ERROR]', err);
+      return internalErrorResponse(res, 'Gagal mengambil data customers', err);
     }
-    if (results.length === 0) {
-      return res.status(404).json({ message: 'No customers found' });
+
+    if (!results || results.length === 0) {
+      return successResponse(res, 'No customers found', [], null, 200);
     }
-    res.status(200).json(results);
+
+    return successResponse(
+      res,
+      'Customers retrieved successfully',
+      results,
+      null,
+      200
+    );
   });
 };
 
 /**
- * Mengambil satu pelanggan berdasarkan ID.
- * @param {Object} req - Request dari client.
- * @param {Object} res - Response dari server.
+ * Mengambil satu pelanggan berdasarkan ID
+ * @param {Object} req - Request dari client
+ * @param {Object} res - Response dari server
  */
 export const getCustomerById = (req, res) => {
   const id = req.params.id;
+
+  // Validate ID parameter
+  const customerId = parseInt(id);
+  if (isNaN(customerId) || customerId < 1) {
+    return validationErrorResponse(res, [
+      'Customer ID harus berupa angka positif',
+    ]);
+  }
+
   CustomersService.getCustomerByIdWithCallback(id, (err, results) => {
     if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    if (results.length === 0) {
-      return res.status(404).json({ message: 'Customer not found' });
+      console.error('[GET CUSTOMER BY ID ERROR]', err);
+      return internalErrorResponse(res, 'Gagal mengambil data customer', err);
     }
 
-    return res.json(results); // ✅ Mengembalikan objek pelanggan (bukan array)
+    if (!results || results.length === 0) {
+      return notFoundErrorResponse(res, 'Customer');
+    }
+
+    return successResponse(
+      res,
+      'Customer retrieved successfully',
+      results[0], // Return single object, not array
+      null,
+      200
+    );
   });
 };
 
 /**
- * Menambahkan pelanggan baru ke database.
- * @param {Object} req - Request dari client (berisi data pelanggan).
- * @param {Object} res - Response dari server.
+ * Menambahkan pelanggan baru ke database
+ * @param {Object} req - Request dari client (berisi data pelanggan)
+ * @param {Object} res - Response dari server
  */
 export const addCustomer = (req, res) => {
+  // Validate request body with Joi
   const { error } = customerSchema.validate(req.body);
-  if (error) return res.status(400).json({ error: error.details[0].message });
+  if (error) {
+    const validationErrors = error.details.map((detail) => detail.message);
+    return validationErrorResponse(res, validationErrors);
+  }
 
   CustomersService.addCustomer(req, req.body, (err, results) => {
     if (err) {
-      return res.status(500).json({ error: err.message });
+      console.error('[ADD CUSTOMER ERROR]', err);
+      return internalErrorResponse(res, 'Gagal menambahkan customer', err);
     }
-    res.status(201).json({
-      message: 'Customer added successfully!',
-      customerId: results.insertId,
-    });
+
+    // Return success response with created customer data
+    const newCustomer = {
+      id: results.insertId,
+      ...req.body,
+    };
+
+    return successResponse(
+      res,
+      'Customer added successfully',
+      newCustomer,
+      null,
+      201
+    );
   });
 };
 
 /**
- * Memperbarui data pelanggan berdasarkan ID.
- * @param {Object} req - Request dari client (berisi data yang akan diperbarui).
- * @param {Object} res - Response dari server.
+ * Memperbarui data pelanggan berdasarkan ID
+ * @param {Object} req - Request dari client (berisi data yang akan diperbarui)
+ * @param {Object} res - Response dari server
  */
 export const updateCustomerById = (req, res) => {
-  const { error } = customerSchema.validate(req.body);
-  if (error) return res.status(400).json({ error: error.details[0].message });
-
   const id = req.params.id;
-  const { title, customer_name, date_of_birth, address, whatsapp_number } =
-    req.body;
+
+  // Validate ID parameter
+  const customerId = parseInt(id);
+  if (isNaN(customerId) || customerId < 1) {
+    return validationErrorResponse(res, [
+      'Customer ID harus berupa angka positif',
+    ]);
+  }
+
+  // Validate request body with Joi
+  const { error } = customerSchema.validate(req.body);
+  if (error) {
+    const validationErrors = error.details.map((detail) => detail.message);
+    return validationErrorResponse(res, validationErrors);
+  }
 
   CustomersService.updateCustomerById(req, id, req.body, (err, results) => {
     if (err) {
-      return res.status(500).json({ error: err.message });
+      console.error('[UPDATE CUSTOMER ERROR]', err);
+      return internalErrorResponse(res, 'Gagal mengupdate customer', err);
     }
+
     if (results.affectedRows === 0) {
-      return res.status(404).json({ message: 'Customer not found' });
+      return notFoundErrorResponse(res, 'Customer');
     }
-    res.status(200).json({
-      message: 'Customer updated successfully!',
-      updatedCustomer: {
-        id,
-        title,
-        customer_name,
-        date_of_birth,
-        address,
-        whatsapp_number,
-      },
-    });
+
+    // Return success response with updated customer data
+    const updatedCustomer = {
+      id: customerId,
+      ...req.body,
+    };
+
+    return successResponse(
+      res,
+      'Customer updated successfully',
+      updatedCustomer,
+      null,
+      200
+    );
   });
 };
 
 /**
- * Memperbarui sebagian data pelanggan berdasarkan ID (PATCH).
- * @param {Object} req - Request dari client (berisi data yang akan diperbarui sebagian).
- * @param {Object} res - Response dari server.
- */
-// export const patchCustomerById = (req, res) => {
-//   const id = req.params.id;
-//   const updateFields = req.body;
-
-//   if (!updateFields || Object.keys(updateFields).length === 0) {
-//     return res.status(400).json({ message: 'No fields to update' });
-//   }
-
-//   Customer.patchCustomerById(id, updateFields, (err, results) => {
-//     if (err) {
-//       return res.status(500).json({ error: err.message });
-//     }
-//     if (results.affectedRows === 0) {
-//       return res.status(404).json({ message: 'Customer not found' });
-//     }
-//     res.status(200).json({
-//       message: 'Customer partially updated successfully!',
-//       updatedFields: updateFields,
-//     });
-//   });
-// };
-
-/**
- * Menghapus pelanggan berdasarkan ID.
- * @param {Object} req - Request dari client.
- * @param {Object} res - Response dari server.
+ * Menghapus pelanggan berdasarkan ID
+ * @param {Object} req - Request dari client
+ * @param {Object} res - Response dari server
  */
 export const deleteCustomerById = (req, res) => {
   const id = req.params.id;
+
+  // Validate ID parameter
+  const customerId = parseInt(id);
+  if (isNaN(customerId) || customerId < 1) {
+    return validationErrorResponse(res, [
+      'Customer ID harus berupa angka positif',
+    ]);
+  }
+
   CustomersService.deleteCustomerById(id, (err, results) => {
     if (err) {
-      return res.status(500).json({ error: err.message, id: id });
+      console.error('[DELETE CUSTOMER ERROR]', err);
+      return internalErrorResponse(res, 'Gagal menghapus customer', err);
     }
+
     if (results.affectedRows === 0) {
-      return res.status(404).json({ message: 'Customer not found' });
+      return notFoundErrorResponse(res, 'Customer');
     }
-    res.json({
-      message: 'Customer deleted successfully!',
-      numCustomersDeleted: results.affectedRows,
-    });
+
+    return successResponse(
+      res,
+      'Customer deleted successfully',
+      {
+        id: customerId,
+        deletedCount: results.affectedRows,
+      },
+      null,
+      200
+    );
   });
 };

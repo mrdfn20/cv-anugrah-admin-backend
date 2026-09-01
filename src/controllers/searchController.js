@@ -1,23 +1,31 @@
 // controllers/searchController.js
 import SearchService from '../services/searchService.js';
+import {
+  successResponse,
+  validationErrorResponse,
+  internalErrorResponse,
+} from '../helpers/responseHelper.js';
 
 const search = async (req, res) => {
   const { q } = req.query;
 
   if (!q || q.trim() === '') {
-    return res.status(400).json({ error: 'Query parameter `q` is required.' });
+    return validationErrorResponse(res, ['Query parameter `q` is required']);
   }
 
   try {
-    const results = await SearchService.globalSearch(q);
+    const results = await SearchService.globalSearch(q.trim());
 
-    return res.status(200).json({
-      message: 'Search results fetched successfully',
-      data: results,
-    });
+    return successResponse(
+      res,
+      'Search results fetched successfully',
+      results,
+      null,
+      200
+    );
   } catch (error) {
-    console.error('Search error:', error.message);
-    return res.status(500).json({ error: error.message });
+    console.error('[SEARCH ERROR]', error);
+    return internalErrorResponse(res, 'Gagal melakukan pencarian', error);
   }
 };
 

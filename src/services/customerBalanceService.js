@@ -4,10 +4,16 @@ import CustomersService from '../services/customersService.js';
 import logHelper from '../helpers/logHelper.js';
 
 const CostumerBalanceService = {
-  addCustomerBalance: async (req, { customer_id, balance }) => {
+  // Semua fungsi di bawah terima parameter `conn` opsional (koneksi dari withTransaction()) -
+  // dipakai saat fungsi ini dipanggil sbg bagian dari alur multi-step (mis. addTransaction,
+  // payDebt) supaya query saldo ikut dalam transaction yang sama & bisa di-rollback bareng
+  // kalau ada step lain yang gagal. Kalau dipanggil langsung (endpoint /customerbalance biasa),
+  // `conn` gak dikirim -> perilakunya persis kayak sebelumnya.
+  addCustomerBalance: async (req, { customer_id, balance }, conn) => {
     const result = await CustomerBalanceModel.insertCustomerBalance(
       customer_id,
-      balance
+      balance,
+      conn
     );
 
     await logHelper(req, {
@@ -20,7 +26,7 @@ const CostumerBalanceService = {
     return result;
   },
 
-  updateCustomerBalance: async (req, { customer_id, balance: newBalance }) => {
+  updateCustomerBalance: async (req, { customer_id, balance: newBalance }, conn) => {
     const customerData = await CustomersService.getCustomerById(customer_id);
 
     if (!customerData || customerData.length === 0) {
@@ -29,7 +35,8 @@ const CostumerBalanceService = {
 
     const result = await CustomerBalanceModel.updateCustomerBalance(
       customer_id,
-      newBalance
+      newBalance,
+      conn
     );
 
     await logHelper(req, {
@@ -40,10 +47,11 @@ const CostumerBalanceService = {
     return result;
   },
 
-  reduceCustomerBalance: async (req, { customer_id, balanceUsed }) => {
+  reduceCustomerBalance: async (req, { customer_id, balanceUsed }, conn) => {
     // 1️⃣ Ambil balance pelanggan
     const balanceData = await CustomerBalanceModel.getCustomerBalanceById(
-      customer_id
+      customer_id,
+      conn
     );
 
     if (!balanceData) {
@@ -60,7 +68,8 @@ const CostumerBalanceService = {
     // 3️⃣ Kurangi balance di DB
     const updateResult = await CustomerBalanceModel.reduceCustomerBalance(
       customer_id,
-      balanceUsed
+      balanceUsed,
+      conn
     );
 
     // 4️⃣ Logging jika sukses
@@ -83,9 +92,10 @@ const CostumerBalanceService = {
     return results;
   },
 
-  getCustomerBalanceById: async (customer_id) => {
+  getCustomerBalanceById: async (customer_id, conn) => {
     const balance = await CustomerBalanceModel.getCustomerBalanceById(
-      customer_id
+      customer_id,
+      conn
     );
     return balance;
   },

@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import bodyParser from 'body-parser';
 import morgan from 'morgan';
 import moment from 'moment';
@@ -22,9 +23,28 @@ import gallonMovementRoutes from './routes/gallonMovements.js';
 import dashboardRoutes from './routes/dashboard.js';
 import searchRoutes from './routes/search.js';
 import auditLogs from './routes/auditLogs.js';
+import reportsRoutes from './routes/reports.js';
+import armadaRoutes from './routes/armada.js';
 
 // Middleware Configuration
-app.use(cors()); // Mengizinkan akses API dari domain lain (CORS)
+app.use(helmet()); // Security headers standar (CSP, X-Content-Type-Options, dll)
+
+// Origin yang diizinkan diambil dari env var ALLOWED_ORIGINS (dipisah koma) - default ke
+// localhost dev kalau env var gak diset, supaya `npm run start-dev` tetap jalan tanpa .env
+// tambahan. Di production (Railway), isi ALLOWED_ORIGINS dgn URL Vercel frontend kamu.
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map((origin) => origin.trim())
+  : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+
+app.use(
+  cors({
+    // JANGAN gunakan wildcard '*'
+    origin: allowedOrigins,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+); // Mengizinkan akses API dari domain lain (CORS)
 app.use(bodyParser.urlencoded({ extended: false })); // Parsing request dengan format application/x-www-form-urlencoded
 app.use(bodyParser.json()); // Parsing request dengan format JSON
 app.use((req, res, next) => {
@@ -66,6 +86,8 @@ app.use('/api/gallonmovements', gallonMovementRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/auditlogs', auditLogs);
+app.use('/api/reports', reportsRoutes);
+app.use('/api/armadas', armadaRoutes);
 
 // Default Route
 app.get('/', (req, res) => {

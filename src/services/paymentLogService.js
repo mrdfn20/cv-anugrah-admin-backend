@@ -1,5 +1,6 @@
 import PaymentLogsModel from '../models/paymentLogsModel.js';
 import CustomerBalanceService from './customerBalanceService.js';
+import withTransaction from '../helpers/dbTransactionHelper.js';
 
 import logHelper from '../helpers/logHelper.js';
 
@@ -21,38 +22,61 @@ const PaymentLogService = {
     );
     const customerBalance = balanceData ? parseInt(balanceData.balance) : 0;
 
-    // ❗ Jika saldo belum ada, buatkan dengan 0
-    if (!balanceData) {
-      await CustomerBalanceService.addCustomerBalance(req, {
-        customer_id: debt.customer_id,
-        balance: 0,
-      });
-    }
-
     // 🔢 Hitung pembayarannya
     const totalPayment = amount_paid + customerBalance;
     const paymentForDebt = Math.min(totalPayment, remainingDebt);
     const balanceUsed = Math.min(customerBalance, remainingDebt);
     const extraBalance = Math.max(totalPayment - remainingDebt, 0);
 
-    // 🔁 Kurangi saldo jika digunakan
-    if (balanceUsed > 0) {
-      await CustomerBalanceService.reduceCustomerBalance(req, {
-        customer_id: debt.customer_id,
-        balanceUsed,
-      });
-    }
+    // 🔒 Kurangi saldo + simpan log pembayaran + tambah saldo kelebihan dijalankan dalam
+    // 1 DB transaction - kalau ada step yang gagal di tengah, semua ikut di-rollback
+    // (saldo gak kepotong sendiri tanpa payment log tercatat, dst).
+    const paymentResult = await withTransaction(async (conn) => {
+      // ❗ Jika saldo belum ada, buatkan dengan 0
+      if (!balanceData) {
+        await CustomerBalanceService.addCustomerBalance(
+          req,
+          { customer_id: debt.customer_id, balance: 0 },
+          conn
+        );
+      }
 
-    // 💾 Simpan log pembayaran
-    const paymentResult = await PaymentLogService.addPaymentLogs(req, {
-      transaction_id: debt.transaction_id,
-      customer_id: debt.customer_id,
-      owe_date: debt.transaction_date,
-      payment_date: payment_date || new Date().toISOString().slice(0, 10),
-      amount_paid: paymentForDebt,
+      // 🔁 Kurangi saldo jika digunakan
+      if (balanceUsed > 0) {
+        await CustomerBalanceService.reduceCustomerBalance(
+          req,
+          { customer_id: debt.customer_id, balanceUsed },
+          conn
+        );
+      }
+
+      // 💾 Simpan log pembayaran
+      const result = await PaymentLogService.addPaymentLogs(
+        req,
+        {
+          transaction_id: debt.transaction_id,
+          customer_id: debt.customer_id,
+          owe_date: debt.transaction_date,
+          payment_date: payment_date || new Date().toISOString().slice(0, 10),
+          amount_paid: paymentForDebt,
+        },
+        conn
+      );
+
+      // ➕ Tambahkan saldo jika ada kelebihan
+      if (extraBalance > 0) {
+        await CustomerBalanceService.updateCustomerBalance(
+          req,
+          { customer_id: debt.customer_id, balance: extraBalance },
+          conn
+        );
+      }
+
+      return result;
     });
 
-    // ✅ Logging
+    // ✅ Logging (di luar transaction - gagal nulis audit log gak boleh nge-rollback
+    // pembayaran yang sudah sukses tercatat)
     await logHelper(req, {
       action: 'CREATE',
       endpoint: '/paymentlogs/paydebt',
@@ -64,7 +88,6 @@ const PaymentLogService = {
       },
     });
 
-    // ➕ Tambahkan saldo jika ada kelebihan
     let response = {
       message: 'Payment recorded successfully.',
       paymentLogId: paymentResult.insertId,
@@ -73,13 +96,6 @@ const PaymentLogService = {
     };
 
     if (extraBalance > 0) {
-      const balanceResult = await CustomerBalanceService.updateCustomerBalance(
-        req,
-        {
-          customer_id: debt.customer_id,
-          extraBalance,
-        }
-      );
       response.extraBalance = {
         customerId: debt.customer_id,
         balance: extraBalance,
@@ -102,20 +118,26 @@ const PaymentLogService = {
   getDebtsByfilter: async (
     transaction_id,
     customer_id,
+    customer_name,
     startDate,
     endDate,
     status,
     sortBy,
-    sortOrder
+    sortOrder,
+    page,
+    limit
   ) => {
     const results = await PaymentLogsModel.getDebtsByfilter(
       transaction_id,
       customer_id,
+      customer_name,
       startDate,
       endDate,
       status,
       sortBy,
-      sortOrder
+      sortOrder,
+      page,
+      limit
     );
     return results;
   },
@@ -154,14 +176,16 @@ const PaymentLogService = {
 
   addPaymentLogs: async (
     req,
-    { transaction_id, customer_id, owe_date, payment_date, amount_paid }
+    { transaction_id, customer_id, owe_date, payment_date, amount_paid },
+    conn
   ) => {
     const result = await PaymentLogsModel.insertPaymentLogs(
       transaction_id,
       customer_id,
       owe_date,
       payment_date,
-      amount_paid
+      amount_paid,
+      conn
     );
 
     // ✅ Logging setelah berhasil insert

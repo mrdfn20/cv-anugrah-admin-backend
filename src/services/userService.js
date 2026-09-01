@@ -1,5 +1,4 @@
 import User from '../models/userModel.js';
-import bcrypt from 'bcrypt';
 
 class UserService {
   async getAllUsers() {
@@ -7,24 +6,32 @@ class UserService {
       const results = await User.getAllUsers();
       return results;
     } catch (error) {
-      throw new error(error);
+      throw new Error(error.message);
     }
   }
 
-  async deleteUser({ username, password }) {
+  async getUserById(id) {
+    try {
+      const user = await User.getUserById(id);
+      if (!user) {
+        throw new Error('User not found');
+      }
+      return user;
+    } catch (error) {
+      throw new Error(error.message);
+    }
+  }
+
+  async deleteUser({ username }) {
     try {
       const user = await User.getUserByUsername(username);
       if (!user) {
         throw new Error('User not found');
       }
 
-      // Cek password dengan hash di database
-      const isPasswordMatch = await bcrypt.compare(password, user.password);
-      if (!isPasswordMatch) {
-        throw new Error('Wrong password');
-      }
-
-      // Jika password cocok, hapus user
+      // Otorisasi sudah ditangani roleMiddleware(['Admin']) di route -
+      // tidak perlu re-konfirmasi password (Admin tidak mungkin tahu
+      // plaintext password user lain).
       await User.deleteUser(username);
       return { message: 'User deleted successfully' };
     } catch (error) {

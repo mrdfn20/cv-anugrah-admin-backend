@@ -7,7 +7,12 @@ const Transactions = {
    * @param {Object} data - Data transaksi
    * @returns {Promise<number>} ID transaksi baru
    */
-  insertTransaction: async (data) => {
+  /**
+   * @param {Object} data - Data transaksi
+   * @param {import('mysql2/promise').PoolConnection} [conn] - Koneksi transaction opsional
+   *   (dipakai dari withTransaction() saat insert ini bagian dari alur multi-step).
+   */
+  insertTransaction: async (data, conn) => {
     const {
       customer_id,
       gallon_filled,
@@ -28,19 +33,18 @@ const Transactions = {
       VALUES (NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
-    const [results] = await dbConnection
-      .promise()
-      .execute(query, [
-        customer_id,
-        gallon_filled,
-        gallon_empty,
-        gallon_returned,
-        transaction_type,
-        armada_id,
-        gallon_price_id,
-        total_price,
-        payment_amount,
-      ]);
+    const executor = conn || dbConnection.promise();
+    const [results] = await executor.execute(query, [
+      customer_id,
+      gallon_filled,
+      gallon_empty,
+      gallon_returned,
+      transaction_type,
+      armada_id,
+      gallon_price_id,
+      total_price,
+      payment_amount,
+    ]);
 
     return results.insertId;
   },
@@ -72,7 +76,7 @@ const Transactions = {
       SET deleted_at = NULL
       WHERE id = ?
     `;
-    const [results] = await dbConnection.execute(query, [transaction_id]);
+    const [results] = await dbConnection.promise().execute(query, [transaction_id]);
     return results;
   },
 
@@ -81,6 +85,21 @@ const Transactions = {
    */
   getTransactions: async () => {
     const query = `SELECT * FROM transactions WHERE deleted_at IS NULL`;
+    const [results] = await dbConnection.promise().execute(query);
+    return results;
+  },
+
+  /**
+   * Mengambil transaksi yang sudah di-soft-delete (buat fitur restore)
+   */
+  getDeletedTransactions: async () => {
+    const query = `
+      SELECT t.*, c.customer_name
+      FROM transactions t
+      JOIN customers c ON t.customer_id = c.id
+      WHERE t.deleted_at IS NOT NULL
+      ORDER BY t.deleted_at DESC
+    `;
     const [results] = await dbConnection.promise().execute(query);
     return results;
   },
@@ -114,6 +133,11 @@ const Transactions = {
 
   /**
    * Mengambil transaksi berdasarkan filter id pel ,nama pel, id trans, sub region id, sub region name dan rentang tanggal
+   *
+   * `page`/`limit` OPSIONAL: dipakai FE halaman Transaksi (server-side pagination). Kalau
+   * `limit` gak dikirim (mis. dipanggil dari halaman Laporan yang butuh SEMUA transaksi dalam
+   * rentang tanggal, bukan cuma 1 halaman), query jalan tanpa LIMIT/OFFSET persis kayak
+   * perilaku lama - return array biasa. Kalau `limit` dikirim, return `{ data, total }`.
    */
   getTransactionsByFilter: async (
     customer_id,
@@ -124,80 +148,96 @@ const Transactions = {
     startDate,
     endDate,
     sortBy,
-    sortOrder
+    sortOrder,
+    page,
+    limit
   ) => {
-    let query = `
-      SELECT t.* 
-      FROM transactions t 
-      JOIN customers c ON t.customer_id = c.id 
-      LEFT JOIN sub_regions sr ON c.sub_region_id = sr.id
-      WHERE 1=1 AND t.deleted_at IS NULL
-    `;
-
+    const whereClauses = ['1=1', 't.deleted_at IS NULL'];
     const queryParams = [];
 
     if (customer_id) {
-      query += ` AND c.id = ?`;
+      whereClauses.push('c.id = ?');
       queryParams.push(customer_id);
     }
 
     if (customer_name) {
-      query += ` AND c.customer_name LIKE ?`;
+      whereClauses.push('c.customer_name LIKE ?');
       queryParams.push(`%${customer_name}%`);
     }
 
     if (transactionId) {
-      query += ` AND t.id = ?`;
+      whereClauses.push('t.id = ?');
       queryParams.push(transactionId);
     }
 
     if (sub_region_id) {
-      query += ` AND c.sub_region_id = ?`;
+      whereClauses.push('c.sub_region_id = ?');
       queryParams.push(sub_region_id);
     }
 
     if (sub_region_name) {
-      query += ` AND sr.sub_region_name LIKE ?`;
+      whereClauses.push('sr.sub_region_name LIKE ?');
       queryParams.push(`%${sub_region_name}%`);
     }
 
     if (startDate && endDate) {
-      query += ` AND DATE(t.transaction_date) BETWEEN ? AND ?`;
+      whereClauses.push('DATE(t.transaction_date) BETWEEN ? AND ?');
       queryParams.push(startDate, endDate);
     } else {
       if (startDate) {
-        query += ` AND DATE(t.transaction_date) >= ?`;
+        whereClauses.push('DATE(t.transaction_date) >= ?');
         queryParams.push(startDate);
       }
       if (endDate) {
-        query += ` AND DATE(t.transaction_date) <= ?`;
+        whereClauses.push('DATE(t.transaction_date) <= ?');
         queryParams.push(endDate);
       }
     }
 
-    // Sorting
-    if (!sortBy) {
-      query += ` ORDER BY t.transaction_date`;
-    } else if (sortBy === 'transaction_date') {
-      query += ` ORDER BY t.transaction_date`;
+    const fromAndWhere = `
+      FROM transactions t
+      JOIN customers c ON t.customer_id = c.id
+      LEFT JOIN sub_regions sr ON c.sub_region_id = sr.id
+      WHERE ${whereClauses.join(' AND ')}
+    `;
+
+    let orderByClause = '';
+    if (!sortBy || sortBy === 'transaction_date') {
+      orderByClause = ' ORDER BY t.transaction_date';
     } else if (sortBy === 'customer_name') {
-      query += ` ORDER BY c.customer_name`;
+      orderByClause = ' ORDER BY c.customer_name';
     }
-
     if (sortOrder === 'ASC' || sortOrder === 'DESC') {
-      query += ` ${sortOrder}`;
+      orderByClause += ` ${sortOrder}`;
     }
 
-    console.log('Query:', query);
-    console.log('Params:', queryParams);
+    let query = `SELECT t.* ${fromAndWhere}${orderByClause}`;
+    const selectParams = [...queryParams];
 
-    const [results] = await dbConnection.promise().execute(query, queryParams);
-    return results.map((t) => ({
+    let total = null;
+    if (limit) {
+      const countQuery = `SELECT COUNT(*) AS total ${fromAndWhere}`;
+      const [countResult] = await dbConnection
+        .promise()
+        .execute(countQuery, queryParams);
+      total = countResult[0].total;
+
+      const safePage = Math.max(parseInt(page) || 1, 1);
+      const safeLimit = Math.max(parseInt(limit) || 10, 1);
+      const offset = (safePage - 1) * safeLimit;
+      query += ' LIMIT ? OFFSET ?';
+      selectParams.push(safeLimit, offset);
+    }
+
+    const [results] = await dbConnection.promise().execute(query, selectParams);
+    const mapped = results.map((t) => ({
       ...t,
       transaction_date: moment(t.transaction_date)
         .tz('Asia/Jakarta')
         .format('YYYY-MM-DD'),
     }));
+
+    return limit ? { data: mapped, total } : mapped;
   },
 };
 

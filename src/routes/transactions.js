@@ -3,6 +3,7 @@ const router = express.Router();
 import {
   addTransaction as addTransactionController,
   getAllTransactions as getAllTransactionsController,
+  getDeletedTransactions as getDeletedTransactionsController,
   getTransactionById as getTransactionByIdController,
   getTransactionByCustomerId as getTransactionByCustomerIdController,
   getTransactionsByFilter as getTransactionsByFilterController,
@@ -55,6 +56,19 @@ router.get(
   authMiddleware,
   roleMiddleware(['Admin', 'Editor', 'Driver']),
   getTransactionsByFilterController
+);
+
+/**
+ * @route GET /transactions/deleted
+ * @desc Mengambil transaksi yang sudah dihapus (soft delete) - buat fitur restore
+ * @note Harus didaftarkan sebelum GET /:id, kalau tidak Express bakal nangkep
+ * "deleted" sebagai parameter :id.
+ */
+router.get(
+  '/deleted',
+  authMiddleware,
+  roleMiddleware(['Admin', 'Editor']),
+  getDeletedTransactionsController
 );
 
 /**

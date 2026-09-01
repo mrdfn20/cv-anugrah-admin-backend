@@ -1,5 +1,12 @@
 import CustomerBalanceService from '../services/customerBalanceService.js';
 import CustomersService from '../services/customersService.js';
+import {
+  successResponse,
+  validationErrorResponse,
+  notFoundErrorResponse,
+  conflictErrorResponse,
+  internalErrorResponse,
+} from '../helpers/responseHelper.js';
 
 /**
  * Menambahkan saldo pelanggan baru ke database.
@@ -11,21 +18,22 @@ export const addCustomerBalance = async (req, res) => {
     const { customer_id, balance } = req.body;
 
     if (!customer_id || isNaN(customer_id)) {
-      return res.status(400).json({ error: 'Invalid customer ID' });
+      return validationErrorResponse(res, ['Invalid customer ID']);
     }
 
     const customer = await CustomersService.getCustomerById(customer_id);
     if (!customer) {
-      return res.status(404).json({ error: 'Customer not found' });
+      return notFoundErrorResponse(res, 'Customer');
     }
 
     const existingBalance = await CustomerBalanceService.getCustomerBalanceById(
       customer_id
     );
     if (existingBalance) {
-      return res
-        .status(409)
-        .json({ error: 'Balance already exists for this customer' });
+      return conflictErrorResponse(
+        res,
+        'Balance already exists for this customer'
+      );
     }
 
     await CustomerBalanceService.addCustomerBalance(req, {
@@ -33,12 +41,16 @@ export const addCustomerBalance = async (req, res) => {
       balance,
     });
 
-    return res.status(201).json({
-      message: 'Customer balance added successfully!',
-      customer_id,
-    });
+    return successResponse(
+      res,
+      'Customer balance added successfully',
+      { customer_id },
+      null,
+      201
+    );
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    console.error('[ADD CUSTOMER BALANCE ERROR]', error);
+    return internalErrorResponse(res, 'Gagal menambahkan saldo pelanggan', error);
   }
 };
 
@@ -52,14 +64,22 @@ export const getCustomersBalance = async (req, res) => {
     const results = await CustomerBalanceService.getCustomersBalance();
 
     if (!results || results.length === 0) {
-      return res.status(404).json({ message: 'No customer balances found' });
+      return successResponse(res, 'No customer balances found', [], null, 200);
     }
 
-    res.status(200).json(results);
+    return successResponse(
+      res,
+      'Customer balances retrieved successfully',
+      results,
+      null,
+      200
+    );
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[GET CUSTOMERS BALANCE ERROR]', error);
+    return internalErrorResponse(res, 'Gagal mengambil data saldo pelanggan', error);
   }
 };
+
 /**
  * Mengambil saldo pelanggan berdasarkan ID pelanggan.
  * @param {Object} req - Request dari client.
@@ -69,19 +89,26 @@ export const getCustomerBalanceById = async (req, res) => {
   const { id } = req.params;
 
   if (!id || isNaN(id)) {
-    return res.status(400).json({ error: 'Invalid customer ID' });
+    return validationErrorResponse(res, ['Invalid customer ID']);
   }
 
   try {
     const result = await CustomerBalanceService.getCustomerBalanceById(id);
 
     if (!result) {
-      return res.status(404).json({ message: 'Customer balance not found' });
+      return notFoundErrorResponse(res, 'Customer balance');
     }
 
-    res.status(200).json({ customer_id: id, balance: result.balance });
+    return successResponse(
+      res,
+      'Customer balance retrieved successfully',
+      { customer_id: id, balance: result.balance },
+      null,
+      200
+    );
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[GET CUSTOMER BALANCE BY ID ERROR]', error);
+    return internalErrorResponse(res, 'Gagal mengambil data saldo pelanggan', error);
   }
 };
 
@@ -94,37 +121,41 @@ export const updateCustomerBalance = async (req, res) => {
   const { customer_id, balance } = req.body;
 
   // ✅ Validasi input
+  const validationErrors = [];
   if (!customer_id || isNaN(customer_id)) {
-    return res.status(400).json({ error: 'Invalid customer ID' });
+    validationErrors.push('Invalid customer ID');
   }
-
   if (!balance || isNaN(balance)) {
-    return res.status(400).json({ error: 'Invalid balance' });
+    validationErrors.push('Invalid balance');
+  } else if (balance <= 0) {
+    validationErrors.push('Balance cannot be 0 or negative');
   }
-
-  // ✅ Cek apakah customer_id ada
-  const customer = await CustomersService.getCustomerById(customer_id);
-  if (!customer) {
-    return res.status(404).json({ message: 'Customer not found' });
-  }
-
-  if (balance <= 0) {
-    return res.status(400).json({ error: 'Balance cannot be 0 or negative' });
+  if (validationErrors.length > 0) {
+    return validationErrorResponse(res, validationErrors);
   }
 
   try {
+    // ✅ Cek apakah customer_id ada
+    const customer = await CustomersService.getCustomerById(customer_id);
+    if (!customer) {
+      return notFoundErrorResponse(res, 'Customer');
+    }
+
     // ✅ Panggil service
-    const result = await CustomerBalanceService.updateCustomerBalance(req, {
+    await CustomerBalanceService.updateCustomerBalance(req, {
       customer_id,
       balance,
     });
 
-    res.status(200).json({
-      message: 'Customer balance updated successfully!',
-      customer_id,
-      addedBalance: balance,
-    });
+    return successResponse(
+      res,
+      'Customer balance updated successfully',
+      { customer_id, addedBalance: balance },
+      null,
+      200
+    );
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[UPDATE CUSTOMER BALANCE ERROR]', error);
+    return internalErrorResponse(res, 'Gagal memperbarui saldo pelanggan', error);
   }
 };

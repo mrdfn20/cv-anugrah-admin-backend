@@ -3,6 +3,7 @@ import TransactionsModel from '../models/transactionsModel.js';
 import PaymentLogService from '../services/paymentLogService.js';
 import CustomerBalanceService from '../services/customerBalanceService.js';
 import GallonService from '../services/gallonService.js';
+import withTransaction from '../helpers/dbTransactionHelper.js';
 
 import logHelper from '../helpers/logHelper.js';
 
@@ -60,29 +61,71 @@ const TransactionService = {
       finalTransactionType = 'Tunai';
     }
 
-    // 4️⃣ Jika menggunakan saldo, kurangi saldo
-    if (balanceUsed > 0) {
-      await CustomerBalanceService.reduceCustomerBalance(
-        customer_id,
-        balanceUsed,
-        transactionData
-      );
-    }
+    // 4️⃣-7️⃣ Kurangi saldo (kalau dipakai) -> simpan transaksi -> catat payment_logs
+    // (kalau hutang) -> tambah saldo kelebihan (kalau ada), semua dalam 1 DB transaction.
+    // Kalau ada 1 step gagal di tengah, semua step lain ikut di-rollback - gak ada lagi
+    // kasus saldo kepotong tapi transaksinya sendiri gagal tersimpan.
+    // Signature CustomerBalanceService.reduceCustomerBalance/updateCustomerBalance adalah
+    // (req, { customer_id, balanceUsed/balance }, conn) - sebelumnya (di alur ini) pernah
+    // dipanggil dengan urutan argumen yang salah sehingga customer_id/balanceUsed selalu
+    // undefined dan query gagal ("Bind parameters must not contain undefined").
+    const { transactionId, paymentResult } = await withTransaction(async (conn) => {
+      if (balanceUsed > 0) {
+        await CustomerBalanceService.reduceCustomerBalance(
+          transactionData,
+          { customer_id, balanceUsed },
+          conn
+        );
+      }
 
-    // 5️⃣ Simpan transaksi ke DB
-    const transactionId = await TransactionsModel.insertTransaction({
-      customer_id,
-      gallon_filled,
-      gallon_empty,
-      gallon_returned,
-      transaction_type: finalTransactionType,
-      armada_id,
-      gallon_price_id,
-      total_price,
-      payment_amount: amount_paid,
+      // 5️⃣ Simpan transaksi ke DB
+      const newTransactionId = await TransactionsModel.insertTransaction(
+        {
+          customer_id,
+          gallon_filled,
+          gallon_empty,
+          gallon_returned,
+          transaction_type: finalTransactionType,
+          armada_id,
+          gallon_price_id,
+          total_price,
+          payment_amount: amount_paid,
+        },
+        conn
+      );
+
+      let newPaymentResult = null;
+
+      // 6️⃣ Catat ke payment_logs jika hutang
+      if (finalTransactionType === 'Hutang' && amount_paid >= 0) {
+        newPaymentResult = await PaymentLogService.addPaymentLogs(
+          transactionData,
+          {
+            transaction_id: newTransactionId,
+            customer_id,
+            owe_date: new Date().toISOString().slice(0, 10),
+            payment_date: null,
+            amount_paid,
+          },
+          conn
+        );
+
+        // 7️⃣ Jika ada kelebihan, simpan sebagai saldo
+        const extraBalance = amount_paid - total_price;
+        if (extraBalance > 0) {
+          await CustomerBalanceService.updateCustomerBalance(
+            transactionData,
+            { customer_id, balance: extraBalance },
+            conn
+          );
+        }
+      }
+
+      return { transactionId: newTransactionId, paymentResult: newPaymentResult };
     });
 
-    // ✅ Logging transaksi
+    // ✅ Logging transaksi (di luar transaction - gagal nulis audit log gak boleh
+    // nge-rollback transaksi yang sudah sukses tercatat)
     await logHelper(transactionData, {
       action: 'CREATE',
       endpoint: '/transactions',
@@ -99,34 +142,23 @@ const TransactionService = {
       },
     });
 
-    let response = { transactionId };
+    // finalTransactionType & amount_paid disertakan di response supaya controller
+    // menampilkan status yang benar-benar tersimpan (bisa berubah dari Hutang -> Tunai
+    // kalau saldo pelanggan mencukupi seluruh total_price di atas).
+    let response = {
+      transactionId,
+      total_price,
+      gallonPrice,
+      transaction_type: finalTransactionType,
+      amount_paid,
+    };
 
-    // 6️⃣ Catat ke payment_logs jika hutang
-    if (finalTransactionType === 'Hutang' && amount_paid >= 0) {
-
-      const paymentResult = await PaymentLogService.addPaymentLogs(
-        transactionData,
-        {
-          transaction_id: transactionId,
-          customer_id,
-          owe_date: new Date().toISOString().slice(0, 10),
-          payment_date: null,
-          amount_paid,
-        }
-      ); // Kirim `transactionData` ke service tujuan
-
+    if (paymentResult) {
       response.paymentLogId = paymentResult.insertId;
 
-      // 7️⃣ Jika ada kelebihan, simpan sebagai saldo
       const extraBalance = amount_paid - total_price;
       if (extraBalance > 0) {
-        const balanceResult =
-          await CustomerBalanceService.updateCustomerBalance(
-            customer_id,
-            extraBalance,
-            transactionData // Kirim `transactionData` agar logging terjadi di modul balance
-          );
-        response.extraBalance = balanceResult;
+        response.extraBalance = { customer_id, balance: extraBalance };
       }
     }
 
@@ -234,6 +266,10 @@ const TransactionService = {
     return results;
   },
 
+  getDeletedTransactions: async () => {
+    return await TransactionsModel.getDeletedTransactions();
+  },
+
   getTransactionByCustomerId: async (customer_id) => {
     const transactions = await TransactionsModel.getTransactionByCustomerId(
       customer_id
@@ -253,7 +289,9 @@ const TransactionService = {
     startDate,
     endDate,
     sortBy,
-    sortOrder
+    sortOrder,
+    page,
+    limit
   ) => {
     return await TransactionsModel.getTransactionsByFilter(
       customer_id,
@@ -264,7 +302,9 @@ const TransactionService = {
       startDate,
       endDate,
       sortBy,
-      sortOrder
+      sortOrder,
+      page,
+      limit
     );
   },
 };

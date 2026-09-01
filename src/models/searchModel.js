@@ -34,8 +34,9 @@ class SearchModel {
 
   static async searchDebts(keyword) {
     const query = `
-      SELECT 
+      SELECT
         t.id AS transaction_id,
+        c.id AS customer_id,
         c.customer_name,
         t.total_price,
         COALESCE(SUM(pl.amount_paid), 0) AS total_paid,

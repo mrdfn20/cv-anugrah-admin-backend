@@ -1,4 +1,9 @@
 import GallonMovementsService from '../services/gallonMovementsService.js';
+import {
+  successResponse,
+  validationErrorResponse,
+  internalErrorResponse,
+} from '../helpers/responseHelper.js';
 
 /**
  * Mendapatkan histori pergerakan galon untuk seluruh pelanggan
@@ -10,10 +15,16 @@ export const getAllGallonMovements = async (req, res) => {
 
     const results = await GallonMovementsService.getAllMovements(isGrouped); // 🧠 pass opsi
 
-    res.status(200).json(results);
+    return successResponse(
+      res,
+      'Gallon movements retrieved successfully',
+      results,
+      null,
+      200
+    );
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: error.message });
+    console.error('[GET ALL GALLON MOVEMENTS ERROR]', error);
+    return internalErrorResponse(res, 'Gagal mengambil data pergerakan galon', error);
   }
 };
 
@@ -24,19 +35,24 @@ export const getGallonMovementsByCustomer = async (req, res) => {
   const { customer_id } = req.params;
 
   if (!customer_id || isNaN(parseInt(customer_id))) {
-    return res.status(400).json({ error: 'Invalid customer ID' });
+    return validationErrorResponse(res, ['Invalid customer ID']);
   }
 
   try {
     const results = await GallonMovementsService.getMovementsByCustomerId(customer_id);
-    if (!results || results.length === 0) {
-      return res
-        .status(404)
-        .json({ message: 'No gallon movements found for this customer' });
-    }
-    res.status(200).json(results);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+
+    // Belum ada pergerakan galon itu kondisi normal (pelanggan baru), bukan error.
+    return successResponse(
+      res,
+      results && results.length > 0
+        ? 'Gallon movements retrieved successfully'
+        : 'No gallon movements found for this customer',
+      results || [],
+      null,
+      200
+    );
+  } catch (error) {
+    console.error('[GET GALLON MOVEMENTS BY CUSTOMER ERROR]', error);
+    return internalErrorResponse(res, 'Gagal mengambil data pergerakan galon pelanggan', error);
   }
 };

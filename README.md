@@ -24,7 +24,7 @@ Backend API service for CV Anugrah Gemilang's internal management system. This E
 
 ## Prerequisites
 
-- Node.js v14+ 
+- Node.js v14+
 - MySQL 5.7+
 - npm or yarn
 
@@ -64,12 +64,14 @@ npm run start-dev
 ## API Endpoints
 
 ### Authentication
+
 - `POST /api/auth/register` - Register new user (Admin only)
 - `POST /api/auth/login` - Login and get access token
 - `POST /api/auth/refresh-token` - Refresh access token
 - `POST /api/auth/logout` - Logout and invalidate tokens
 
 ### Customers
+
 - `GET /api/customers` - Get all customers
 - `GET /api/customers/:id` - Get customer by ID
 - `POST /api/customers` - Add new customer
@@ -77,6 +79,7 @@ npm run start-dev
 - `DELETE /api/customers/:id` - Delete customer
 
 ### Transactions
+
 - `GET /api/transactions` - Get all transactions
 - `GET /api/transactions/:id` - Get transaction by ID
 - `GET /api/transactions/customer/:id` - Get transactions by customer ID
@@ -86,6 +89,7 @@ npm run start-dev
 - `PUT /api/transactions/restore/:id` - Restore deleted transaction
 
 ### Payment Logs
+
 - `GET /api/paymentlogs` - Get all payment logs
 - `GET /api/paymentlogs/:id` - Get payment log by ID
 - `GET /api/paymentlogs/transaction/:id` - Get payment logs by transaction ID
@@ -94,22 +98,26 @@ npm run start-dev
 - `POST /api/paymentlogs/paydebt` - Record debt payment
 
 ### Customer Balance
+
 - `GET /api/customerbalance` - Get all customer balances
 - `GET /api/customerbalance/:id` - Get customer balance by ID
 - `POST /api/customerbalance` - Add customer balance
 - `PUT /api/customerbalance` - Update customer balance
 
 ### Gallon Management
+
 - `GET /api/gallon/stock` - Get all gallon stock recap
 - `GET /api/gallon/stock/:customer_id` - Get gallon stock by customer ID
 - `GET /api/gallon/stock/filter` - Filter gallon stock records
 - `GET /api/gallon/price/:customer_id` - Get gallon price by customer ID
 
 ### Gallon Movements
+
 - `GET /api/gallonmovements` - Get all gallon movements
 - `GET /api/gallonmovements/:customer_id` - Get gallon movements by customer ID
 
 ### Dashboard
+
 - `GET /api/dashboard/summary` - Get dashboard summary
 - `GET /api/dashboard/income-summary` - Get income summary
 - `GET /api/dashboard/gallon-summary` - Get gallon summary
@@ -118,13 +126,16 @@ npm run start-dev
 - `GET /api/dashboard/today-activity` - Get today's activities
 
 ### Search
+
 - `GET /api/search` - Global search functionality
 
 ### User Management
+
 - `GET /api/user` - Get all users (Admin only)
 - `DELETE /api/user` - Delete user (Admin only)
 
 ### Audit Logs
+
 - `GET /api/auditlogs` - Get audit logs (Admin only)
 
 ## Project Structure
@@ -152,6 +163,7 @@ Authorization: Bearer your_access_token
 ```
 
 Three role levels are implemented:
+
 - `Admin`: Full access to all endpoints
 - `Editor`: Limited administrative access
 - `Driver`: Limited read-only access to specific endpoints
@@ -171,6 +183,7 @@ The API returns consistent error responses:
 ## Audit Logging
 
 All create, update, and delete operations are logged in the `audit_logs` table, including:
+
 - User ID and role
 - Action performed
 - Endpoint accessed

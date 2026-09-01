@@ -1,6 +1,12 @@
 import GallonService from '../services/gallonService.js';
 
 import moment from 'moment-timezone';
+import {
+  successResponse,
+  validationErrorResponse,
+  notFoundErrorResponse,
+  internalErrorResponse,
+} from '../helpers/responseHelper.js';
 
 export const getGallonPriceByCustomerId = async (req, res) => {
   const customer_id = req.params.customer_id;
@@ -9,31 +15,35 @@ export const getGallonPriceByCustomerId = async (req, res) => {
     const results = await GallonService.getGallonPriceByCustomerId(customer_id);
 
     if (!results) {
-      return res
-        .status(404)
-        .json({ message: 'Customer or gallon price not found' });
+      return notFoundErrorResponse(res, 'Customer or gallon price');
     }
 
-    console.log(customer_id);
-    
-
-    res.status(200).json({
-      customer_id,
-      gallon_price: results.price,
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+    return successResponse(
+      res,
+      'Gallon price retrieved successfully',
+      { customer_id, gallon_price: results.price },
+      null,
+      200
+    );
+  } catch (error) {
+    console.error('[GET GALLON PRICE ERROR]', error);
+    return internalErrorResponse(res, 'Gagal mengambil harga galon', error);
   }
 };
 
 export const getCustomersGallonsStockRecap = async (req, res) => {
   try {
     const results = await GallonService.getCustomersGallonsStockRecap();
-    res.status(200).json(results);
+    return successResponse(
+      res,
+      'Gallon stock recap retrieved successfully',
+      results,
+      null,
+      200
+    );
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: error.message });
+    console.error('[GET GALLON STOCK RECAP ERROR]', error);
+    return internalErrorResponse(res, 'Gagal mengambil rekap stok galon', error);
   }
 };
 
@@ -46,15 +56,19 @@ export const getCustomerGallonsStockRecapByCustomerId = async (req, res) => {
     );
 
     if (!result) {
-      return res
-        .status(404)
-        .json({ message: 'Customer not found or no transaction data' });
+      return notFoundErrorResponse(res, 'Customer or transaction data');
     }
 
-    res.status(200).json(result);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+    return successResponse(
+      res,
+      'Gallon stock recap retrieved successfully',
+      result,
+      null,
+      200
+    );
+  } catch (error) {
+    console.error('[GET GALLON STOCK RECAP BY CUSTOMER ERROR]', error);
+    return internalErrorResponse(res, 'Gagal mengambil rekap stok galon pelanggan', error);
   }
 };
 
@@ -92,24 +106,21 @@ export const getCustomersGallonsStockRecapByFilter = async (req, res) => {
     ].some((val) => val !== undefined);
 
     if (!hasAnyFilter) {
-      return res
-        .status(400)
-        .json({ error: 'Please provide at least one filter' });
+      return validationErrorResponse(res, ['Please provide at least one filter']);
     }
 
     // ✅ Validasi numerik
+    const validationErrors = [];
     if (customer_id && isNaN(parseInt(customer_id))) {
-      return res.status(400).json({ error: 'Invalid customer_id parameter' });
+      validationErrors.push('Invalid customer_id parameter');
     }
 
     if (transaction_id && isNaN(parseInt(transaction_id))) {
-      return res
-        .status(400)
-        .json({ error: 'Invalid transaction_id parameter' });
+      validationErrors.push('Invalid transaction_id parameter');
     }
 
     if (sub_region_id && isNaN(parseInt(sub_region_id))) {
-      return res.status(400).json({ error: 'Invalid sub_region_id parameter' });
+      validationErrors.push('Invalid sub_region_id parameter');
     }
 
     if (
@@ -117,16 +128,11 @@ export const getCustomersGallonsStockRecapByFilter = async (req, res) => {
       transaction_type !== 'Tunai' &&
       transaction_type !== 'Hutang'
     ) {
-      return res.status(400).json({ error: 'Invalid status' });
+      validationErrors.push('Invalid status');
     }
 
     if (armada_id && isNaN(parseInt(armada_id))) {
-      return res.status(400).json({ error: 'Invalid armada_id parameter' });
-    }
-
-    // ✅ Format & normalisasi nama
-    if (customer_name && typeof customer_name === 'string') {
-      customer_name = decodeURI(customer_name.toUpperCase());
+      validationErrors.push('Invalid armada_id parameter');
     }
 
     // ✅ Validasi tanggal
@@ -134,13 +140,11 @@ export const getCustomersGallonsStockRecapByFilter = async (req, res) => {
       (startDate && !moment(startDate, 'YYYY-MM-DD', true).isValid()) ||
       (endDate && !moment(endDate, 'YYYY-MM-DD', true).isValid())
     ) {
-      return res
-        .status(400)
-        .json({ error: 'Format tanggal tidak valid. Gunakan YYYY-MM-DD' });
+      validationErrors.push('Format tanggal tidak valid. Gunakan YYYY-MM-DD');
     }
 
     if (stockLimit && isNaN(parseInt(stockLimit))) {
-      return res.status(400).json({ error: 'Invalid stockLimit parameter' });
+      validationErrors.push('Invalid stockLimit parameter');
     }
 
     // ✅ Validasi sortBy dan sortOrder
@@ -151,12 +155,21 @@ export const getCustomersGallonsStockRecapByFilter = async (req, res) => {
       'unreturned_gallons',
     ];
     if (sortBy && !allowedSortColumns.includes(sortBy)) {
-      return res.status(400).json({ error: 'Invalid sortBy parameter' });
+      validationErrors.push('Invalid sortBy parameter');
     }
 
     const allowedSortOrder = ['ASC', 'DESC'];
     if (sortOrder && !allowedSortOrder.includes(sortOrder.toUpperCase())) {
-      return res.status(400).json({ error: 'Invalid sortOrder parameter' });
+      validationErrors.push('Invalid sortOrder parameter');
+    }
+
+    if (validationErrors.length > 0) {
+      return validationErrorResponse(res, validationErrors);
+    }
+
+    // ✅ Format & normalisasi nama
+    if (customer_name && typeof customer_name === 'string') {
+      customer_name = decodeURI(customer_name.toUpperCase());
     }
 
     // ✅ Ambil hasil
@@ -176,12 +189,18 @@ export const getCustomersGallonsStockRecapByFilter = async (req, res) => {
     );
 
     if (!results.length) {
-      return res.status(404).json({ message: 'No data found' });
+      return successResponse(res, 'No data found', [], null, 200);
     }
 
-    res.status(200).json(results);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+    return successResponse(
+      res,
+      'Filtered gallon stock recap retrieved successfully',
+      results,
+      null,
+      200
+    );
+  } catch (error) {
+    console.error('[GET GALLON STOCK RECAP BY FILTER ERROR]', error);
+    return internalErrorResponse(res, 'Gagal mengambil rekap stok galon dengan filter', error);
   }
 };
