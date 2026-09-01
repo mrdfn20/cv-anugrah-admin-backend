@@ -1,205 +1,228 @@
-# CV Anugrah Gemilang Backend
+# CV Anugrah Gemilang - Backend
 
-Backend API service for CV Anugrah Gemilang's internal management system. This Express.js application provides APIs for customer management, transaction processing, gallon tracking, and dashboard analytics.
+Backend API service for CV Anugrah Gemilang's internal water-gallon delivery management system. Express.js REST API providing customer management, transaction & debt processing, gallon stock tracking, reporting, fleet management, and audit logging — consumed by the [companion SvelteKit dashboard](../frontend-dashboard-admin-anugrahgemilang).
 
 ## Features
 
-- 🔐 **JWT Authentication & Role-based Access Control**
-- 👥 **Customer Management System**
-- 💰 **Transaction & Payment Processing**
-- 📊 **Dashboard Analytics**
-- 🧾 **Debt Management & Payment Tracking**
-- 🚰 **Gallon Movement & Stock Tracking**
-- 🔍 **Global Search Functionality**
-- 📝 **Audit Logging**
+- 🔐 **JWT Authentication & Role-based Access Control** (Admin / Editor / Driver)
+- 👥 **Customer Management** (CRUD, photo via Google Drive link, sub-region/region hierarchy)
+- 💰 **Transaction & Debt Processing** — Tunai/Hutang, customer balance auto-applied, overpayment auto-credited to balance, soft-delete + restore
+- 💳 **Customer Balance Management**
+- 🚰 **Gallon Stock & Movement Tracking** (per-customer and global ledger with running balance)
+- 🧾 **Cross-customer Debt List** (`/paymentlogs/getdebts`)
+- 🚚 **Fleet Management** (Armada CRUD, guarded against deleting a fleet still referenced by transactions)
+- 📊 **Dashboard Analytics** & **Custom-range Reports**
+- 🔍 **Global Search**
+- 📝 **Audit Logging** (every create/update/delete recorded with before/after state)
 
 ## Technology Stack
 
 - **Framework**: Express.js
-- **Database**: MySQL
-- **Authentication**: JWT (JSON Web Tokens)
-- **Validation**: Joi
+- **Database**: MySQL 8.x (connection pool via `mysql2`)
+- **Authentication**: JWT (access + refresh tokens)
 - **Password Hashing**: bcrypt
+- **Validation**: Joi (partial) + manual validation in controllers
+- **Security**: helmet, express-rate-limit (login), configurable CORS allowlist
+- **Testing**: Vitest (unit tests on the financial/auth logic)
+- **Process Manager (production)**: PM2
 - **Date Management**: moment-timezone
 
 ## Prerequisites
 
-- Node.js v14+
-- MySQL 5.7+
-- npm or yarn
+- Node.js v20+
+- MySQL 8.x (or MariaDB 10.4+ for local dev)
+- npm
 
-## Installation
+## Local Setup
 
-1. Clone the repository:
-
-```bash
-git clone https://github.com/yourusername/cv-anugrah-backend.git
-cd cv-anugrah-backend
-```
-
-2. Install dependencies:
+1. Clone the repository and install dependencies:
 
 ```bash
+git clone git@github.com:mrdfn20/cv-anugrah-admin-backend.git
+cd cv-anugrah-admin-backend
 npm install
 ```
 
-3. Create a `.env` file in the root directory with the following variables:
+2. Copy `.env.example` to `.env` and fill in the values:
 
+```bash
+cp .env.example .env
 ```
+
+```env
 PORT=5000
-HOST=localhost
-USER=your_database_user
-PASSWORD=your_database_password
-DATABASE=your_database_name
-JWT_SECRET=your_jwt_secret_key
-JWT_REFRESH_SECRET=your_jwt_refresh_secret_key
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=
+DB_NAME=db_cv_anugrah_gemilang_dev
+JWT_SECRET=          # generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+JWT_REFRESH_SECRET=
+ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 ```
 
-4. Start the development server:
+> ⚠️ Env var names use the `DB_` prefix (`DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`) rather than bare `HOST`/`USER`/`PASSWORD` — generic names like `USER` risk colliding with variables the OS/hosting platform sets on its own.
+
+3. Create the database and import the schema (ask a maintainer for the current `schema.sql`, or export one from an existing environment with `mysqldump --no-data`).
+
+4. Start the dev server (auto-restarts on file changes):
 
 ```bash
 npm run start-dev
 ```
 
+## Testing
+
+```bash
+npm test          # run once
+npm run test:watch  # watch mode
+```
+
+30 Vitest unit tests cover the highest-risk logic — the financial services (`addTransaction`, `payDebt`, `customerBalanceService`), the DB transaction helper (commit/rollback behavior), and the auth/role middleware. Models are mocked; these are not full DB integration tests.
+
 ## API Endpoints
 
-### Authentication
+All routes are prefixed with `/api`. Endpoints marked 🔒 require a valid JWT (`Authorization: Bearer <token>`); role restrictions are noted where relevant.
 
-- `POST /api/auth/register` - Register new user (Admin only)
-- `POST /api/auth/login` - Login and get access token
-- `POST /api/auth/refresh-token` - Refresh access token
-- `POST /api/auth/logout` - Logout and invalidate tokens
+### Authentication (`/auth`)
 
-### Customers
+- `POST /auth/register` 🔒 Admin — register a new user
+- `POST /auth/login` — login (rate-limited)
+- `POST /auth/refresh-token` — refresh access token
+- `GET /auth/verify` 🔒 — verify current token
+- `POST /auth/logout` — logout
 
-- `GET /api/customers` - Get all customers
-- `GET /api/customers/:id` - Get customer by ID
-- `POST /api/customers` - Add new customer
-- `PUT /api/customers/:id` - Update customer
-- `DELETE /api/customers/:id` - Delete customer
+### Customers (`/customers`)
 
-### Transactions
+- `GET /customers` 🔒 · `GET /customers/:id` 🔒 · `POST /customers` 🔒 · `PUT /customers/:id` 🔒 · `DELETE /customers/:id` 🔒 Admin
 
-- `GET /api/transactions` - Get all transactions
-- `GET /api/transactions/:id` - Get transaction by ID
-- `GET /api/transactions/customer/:id` - Get transactions by customer ID
-- `GET /api/transactions/filter` - Filter transactions
-- `POST /api/transactions` - Add new transaction
-- `DELETE /api/transactions/:id` - Delete transaction (soft delete)
-- `PUT /api/transactions/restore/:id` - Restore deleted transaction
+### Transactions (`/transactions`)
 
-### Payment Logs
+- `GET /transactions` 🔒 — all transactions
+- `GET /transactions/filter` 🔒 — filter by customer/sub-region/date range/sort. Optional `page`/`limit` for server-side pagination (returns `{ data, meta.pagination }`); omit both to get the full unpaginated result (used by Reports).
+- `GET /transactions/deleted` 🔒 — soft-deleted transactions (for restore UI)
+- `GET /transactions/:id` 🔒 · `GET /transactions/customer/:id` 🔒
+- `POST /transactions` 🔒 — create (Tunai auto-settles; Hutang applies customer balance first, then any overpayment is credited back to balance). Runs inside a DB transaction — if any step fails, everything rolls back.
+- `DELETE /transactions/:id` 🔒 — soft delete (Editor limited to within 60 minutes of creation)
+- `PUT /transactions/restore/:id` 🔒 — restore a soft-deleted transaction
 
-- `GET /api/paymentlogs` - Get all payment logs
-- `GET /api/paymentlogs/:id` - Get payment log by ID
-- `GET /api/paymentlogs/transaction/:id` - Get payment logs by transaction ID
-- `GET /api/paymentlogs/getdebts` - Get debts with various filters
-- `POST /api/paymentlogs` - Add payment log
-- `POST /api/paymentlogs/paydebt` - Record debt payment
+### Payment Logs & Debts (`/paymentlogs`)
 
-### Customer Balance
+- `GET /paymentlogs` 🔒 · `GET /paymentlogs/:id` 🔒 · `GET /paymentlogs/transaction/:id` 🔒
+- `GET /paymentlogs/getdebts` 🔒 — cross-customer debt list. Filters: `customer_id`, `customer_name`, `startDate`/`endDate`, `status` (`Lunas`/`Belum Lunas`), `sortBy` (`transaction_date`/`remaining_debt`), `sortOrder`. Optional `page`/`limit` for pagination.
+- `POST /paymentlogs` 🔒 · `POST /paymentlogs/paydebt` 🔒 — record a debt payment (also runs inside a DB transaction)
 
-- `GET /api/customerbalance` - Get all customer balances
-- `GET /api/customerbalance/:id` - Get customer balance by ID
-- `POST /api/customerbalance` - Add customer balance
-- `PUT /api/customerbalance` - Update customer balance
+### Customer Balance (`/customerbalance`)
 
-### Gallon Management
+- `GET /customerbalance` 🔒 · `GET /customerbalance/:id` 🔒 · `POST /customerbalance` 🔒 · `PUT /customerbalance` 🔒 (adds to existing balance, not a hard set)
 
-- `GET /api/gallon/stock` - Get all gallon stock recap
-- `GET /api/gallon/stock/:customer_id` - Get gallon stock by customer ID
-- `GET /api/gallon/stock/filter` - Filter gallon stock records
-- `GET /api/gallon/price/:customer_id` - Get gallon price by customer ID
+### Gallon (`/gallon`, `/gallonmovements`)
 
-### Gallon Movements
+- `GET /gallon/stock` 🔒 · `GET /gallon/stock/:customer_id` 🔒 · `GET /gallon/stock/filter` 🔒 · `GET /gallon/price/:customer_id` 🔒
+- `GET /gallonmovements` 🔒 — global movement ledger (running balance per customer); accepts `search`/`page`/`limit` — omit `page`/`limit` for the full unpaginated list
+- `GET /gallonmovements/:customer_id` 🔒 — per-customer history
 
-- `GET /api/gallonmovements` - Get all gallon movements
-- `GET /api/gallonmovements/:customer_id` - Get gallon movements by customer ID
+### Fleet / Armada (`/armadas`)
 
-### Dashboard
+- `GET /armadas` 🔒 (Admin/Editor/Driver) · `POST /armadas` 🔒 Admin · `PUT /armadas/:id` 🔒 Admin · `DELETE /armadas/:id` 🔒 Admin (rejected with 409 if the fleet is still referenced by any transaction)
 
-- `GET /api/dashboard/summary` - Get dashboard summary
-- `GET /api/dashboard/income-summary` - Get income summary
-- `GET /api/dashboard/gallon-summary` - Get gallon summary
-- `GET /api/dashboard/active-customers` - Get active customers count
-- `GET /api/dashboard/debt-status` - Get debt status summary
-- `GET /api/dashboard/today-activity` - Get today's activities
+### Reports (`/reports`)
 
-### Search
+- `GET /reports/summary?startDate=&endDate=` 🔒 Admin/Editor — aggregate income/sales/debt for a custom date range (same income definition as the dashboard)
 
-- `GET /api/search` - Global search functionality
+### Dashboard (`/dashboard`)
 
-### User Management
+- `GET /dashboard/summary` 🔒 · `/income-summary` 🔒 · `/gallon-summary` 🔒 · `/active-customers` 🔒 · `/debt-status` 🔒 · `/today-activity` 🔒
 
-- `GET /api/user` - Get all users (Admin only)
-- `DELETE /api/user` - Delete user (Admin only)
+### Search (`/search`)
 
-### Audit Logs
+- `GET /search` 🔒 — global search across customers/transactions/debts
 
-- `GET /api/auditlogs` - Get audit logs (Admin only)
+### User Management (`/user`)
+
+- `GET /user` 🔒 Admin · `DELETE /user` 🔒 Admin
+
+### Audit Logs (`/auditlogs`)
+
+- `GET /auditlogs` 🔒 Admin — accepts `search` (matches username/role/action/endpoint) and `page`/`limit`; omit both for the full unpaginated list
 
 ## Project Structure
 
 ```
 src/
-├── config/           # Configuration files
-│   └── db.js         # Database connection
-├── controllers/      # Request handlers
-├── helpers/          # Helper functions
-├── middlewares/      # Custom middleware
-├── models/           # Database models
-├── routes/           # API routes
-├── services/         # Business logic
-├── validators/       # Request validation schemas
-└── server.js         # Application entry point
+├── config/           # db.js - MySQL connection pool
+├── controllers/      # Request handlers (validation + calling services + responseHelper)
+├── helpers/          # responseHelper (response envelope), logHelper (audit log), dbTransactionHelper (withTransaction)
+│   └── __tests__/
+├── middlewares/       # authMiddleware, roleMiddleware, rateLimiterMiddleware
+│   └── __tests__/
+├── models/           # Raw SQL queries (mysql2)
+├── routes/           # Express routers
+├── services/         # Business logic (orchestrates models, wraps multi-step writes in withTransaction)
+│   └── __tests__/
+├── validators/       # Joi schemas (partial coverage)
+└── server.js         # App entry point
 ```
+
+## Architecture Notes
+
+- **MVC-style layering**: routes → controllers (validation + HTTP concerns) → services (business logic) → models (SQL). Controllers use `helpers/responseHelper.js` for a consistent `{ success, message, data, meta? }` / `{ success: false, message, error }` envelope.
+- **DB connection pool** (`src/config/db.js`), not a single connection — survives concurrent requests without one slow query blocking everything else.
+- **Multi-step financial writes are atomic**: `addTransaction` and `payDebt` run their balance-adjust / insert-transaction / insert-payment-log / credit-overpayment sequence inside `helpers/dbTransactionHelper.js`'s `withTransaction()` — if any step throws, everything rolls back. Audit logging happens *after* a successful commit, deliberately outside the transaction (a failed audit-log write should never roll back money that was actually recorded).
+- **Server-side pagination is opt-in per endpoint**: passing `page`/`limit` triggers `LIMIT`/`OFFSET` + a `COUNT(*)` and returns `meta.pagination`; omitting them returns the full result exactly as before (kept for the Reports page, which needs an entire date range at once). `LIMIT`/`OFFSET` values are interpolated directly rather than via `?` placeholders — `mysql2`'s prepared-statement binding for these two is inconsistent across MySQL versions (worked on local MariaDB, failed on production MySQL 8.4 with `ER_WRONG_ARGUMENTS`); the values are validated integers via `parseInt` + `Math.max` beforehand, so this is safe.
 
 ## Authentication & Authorization
 
-This API uses JWT for authentication. Include the token in your requests:
+JWT in the `Authorization` header:
 
 ```
-Authorization: Bearer your_access_token
+Authorization: Bearer <access_token>
 ```
 
-Three role levels are implemented:
+Three roles: `Admin` (full access), `Editor` (most write access, time-limited deletes), `Driver` (read-only on a subset of endpoints).
 
-- `Admin`: Full access to all endpoints
-- `Editor`: Limited administrative access
-- `Driver`: Limited read-only access to specific endpoints
+## Deployment
+
+Backend and frontend are deployed together on a single VPS, behind nginx, managed by PM2. Two environments exist side by side on the same server:
+
+| | Production | Staging |
+|---|---|---|
+| Branch | `main` | `develop` |
+| Port (internal) | 5000 | 5001 |
+| Public URL | `:80` via nginx | `:8080` via nginx |
+| Database | `cv_anugrah_gemilang_prod` | `cv_anugrah_gemilang_staging` (separate DB + DB user) |
+| PM2 process | `cv-anugrah-backend` | `cv-anugrah-backend-staging` |
+
+nginx reverse-proxies `/api/*` to this backend and everything else to the frontend's Node server on the same origin — frontend calls the API via a relative `/api` path, so there's no cross-origin request in production and `ALLOWED_ORIGINS` mainly matters for local dev.
+
+### CI/CD
+
+`.github/workflows/deploy-production.yml` and `deploy-staging.yml` run on every push to `main`/`develop` respectively: `npm test` gates the deploy, then `appleboy/ssh-action` pulls the new code on the VPS, reinstalls dependencies, and restarts the matching PM2 process.
+
+> **Push `main` and `develop` as two separate commands**, not `git push origin main develop` in one — a combined multi-branch push has been observed to only trigger the GitHub Actions workflow for one of the two refs.
+
+### Manual server operations (if ever needed)
+
+```bash
+ssh <user>@<vps-host>
+cd ~/apps/backend            # or backend-staging
+git pull origin main         # or develop
+npm install --omit=dev
+pm2 restart cv-anugrah-backend   # or cv-anugrah-backend-staging
+pm2 logs cv-anugrah-backend      # tail logs
+```
 
 ## Error Handling
 
-The API returns consistent error responses:
+Consistent error envelope:
 
 ```json
 {
-  "status": "error",
-  "message": "Error description",
-  "error": "Additional error details (when available)"
+  "success": false,
+  "message": "Human-readable message",
+  "error": { "code": "ERROR_CODE", "details": "..." }
 }
 ```
 
 ## Audit Logging
 
-All create, update, and delete operations are logged in the `audit_logs` table, including:
-
-- User ID and role
-- Action performed
-- Endpoint accessed
-- Request data
-- Previous data state (for updates/deletes)
-- IP address
-
-## License
-
-[MIT](LICENSE)
-
-## Contributors
-
-- Your Name - Initial work - [Your GitHub](https://github.com/yourusername)
-
-## Acknowledgments
-
-- Mention any libraries, tools, or people you want to acknowledge
-# trigger test Wed Sep  2 01:02:11 SEAST 2026
+Every create/update/delete is recorded in `audit_logs`: user ID & role, action, endpoint, request data, previous data (for updates/deletes), IP address, timestamp. Viewable via `GET /auditlogs` (Admin only).
