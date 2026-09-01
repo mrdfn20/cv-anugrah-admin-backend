@@ -225,8 +225,12 @@ const Transactions = {
       const safePage = Math.max(parseInt(page) || 1, 1);
       const safeLimit = Math.max(parseInt(limit) || 10, 1);
       const offset = (safePage - 1) * safeLimit;
-      query += ' LIMIT ? OFFSET ?';
-      selectParams.push(safeLimit, offset);
+      // LIMIT/OFFSET diselipkan langsung (bukan lewat placeholder `?`) - mysql2 prepared
+      // statement (.execute()) punya masalah kompatibilitas binding integer LIMIT/OFFSET
+      // di beberapa versi MySQL (jalan di MariaDB lokal, gagal "Incorrect arguments to
+      // mysqld_stmt_execute" di MySQL 8.4). Aman krn safeLimit/offset sudah dipaksa jadi
+      // integer positif lewat parseInt+Math.max di atas, gak ada input mentah user masuk sini.
+      query += ` LIMIT ${safeLimit} OFFSET ${offset}`;
     }
 
     const [results] = await dbConnection.promise().execute(query, selectParams);

@@ -64,8 +64,10 @@ class AuditLogsModel {
       const safePage = Math.max(parseInt(page) || 1, 1);
       const safeLimit = Math.max(parseInt(limit) || 15, 1);
       const offset = (safePage - 1) * safeLimit;
-      query += ' LIMIT ? OFFSET ?';
-      selectParams.push(safeLimit, offset);
+      // LIMIT/OFFSET diselipkan langsung, bukan lewat placeholder `?` - lihat catatan di
+      // transactionsModel.js (mysql2 .execute() gak konsisten binding integer LIMIT/OFFSET
+      // antar versi MySQL). Aman krn safeLimit/offset sudah integer positif tervalidasi.
+      query += ` LIMIT ${safeLimit} OFFSET ${offset}`;
     }
 
     const [results] = await dbConnection.promise().execute(query, selectParams);
