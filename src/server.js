@@ -11,6 +11,14 @@ import cookieParser from 'cookie-parser';
 const app = express();
 dotenv.config();
 
+// Production/staging selalu diakses lewat nginx (1 reverse proxy hop) - tanpa ini,
+// req.ip selalu kebaca sebagai IP nginx (127.0.0.1) buat SEMUA request, bikin
+// loginLimiter (rate limit per-IP) jadi global (bukan per-client) & audit log
+// (logHelper.js) selalu nyatet 127.0.0.1 bukan IP asli pengunjung. `1` = percaya
+// TEPAT 1 hop proxy (nginx) - lebih aman drpd `true` (percaya semua hop, bisa
+// dispoof kalau ada proxy lain di depan).
+app.set('trust proxy', 1);
+
 // Import routes
 import customerRoutes from './routes/customers.js';
 import paymentRoutes from './routes/paymentLogs.js';

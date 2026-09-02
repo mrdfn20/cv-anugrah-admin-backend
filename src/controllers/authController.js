@@ -12,6 +12,22 @@ import {
 
 const VALID_ROLES = ['Admin', 'Editor', 'Driver'];
 
+// Opsi cookie refresh token - `secure: true` + `sameSite: 'none'` (default) cuma bisa
+// di-set browser di context aman (HTTPS, atau `localhost` yang punya pengecualian khusus
+// buat dev). Production/staging saat ini masih HTTP di alamat IP asli (belum ada
+// domain+TLS) - browser bakal DIAM-DIAM nolak nyimpen cookie ini kalau tetap "secure:true"
+// disitu, bikin refresh token gak pernah nyimpen & user ke-logout tiap ~1 jam.
+// Set COOKIE_SECURE=false & COOKIE_SAMESITE=lax di .env production/staging sampai HTTPS
+// siap (lihat README bagian Deployment) - default di sini TETAP aman (secure+none) kalau
+// env var gak di-set, jadi local dev (FE:5173 -> BE:5000, beda origin, tapi lewat
+// `localhost` yang browser anggap "secure context") gak kepengaruh sama sekali.
+const REFRESH_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.COOKIE_SECURE !== 'false',
+  sameSite: process.env.COOKIE_SAMESITE || 'none',
+  path: '/',
+};
+
 class AuthController {
   /**
    * Register user baru
@@ -78,10 +94,7 @@ class AuthController {
 
       // Set refresh token as HTTP-only cookie
       res.cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'none',
-        path: '/',
+        ...REFRESH_COOKIE_OPTIONS,
         maxAge: 3 * 24 * 60 * 60 * 1000, // 3 hari
       });
 
@@ -188,12 +201,7 @@ class AuthController {
       const result = await authService.logout(refreshToken);
 
       // Clear refresh token cookie
-      res.clearCookie('refreshToken', {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'none',
-        path: '/',
-      });
+      res.clearCookie('refreshToken', REFRESH_COOKIE_OPTIONS);
 
       return successResponse(
         res,

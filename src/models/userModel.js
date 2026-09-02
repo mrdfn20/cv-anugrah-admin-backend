@@ -11,13 +11,19 @@ class User {
   }
 
   static async getUserByUsername(username) {
-    const query = 'SELECT * FROM users WHERE username = ? LIMIT 1';
+    // Dipakai buat login - butuh kolom `password` (hash) buat dibandingin lewat
+    // bcrypt.compare(). Jangan lupa jangan pernah nge-forward hasil fungsi ini
+    // apa adanya ke response API manapun.
+    const query =
+      'SELECT id, username, password, role FROM users WHERE username = ? LIMIT 1';
     const [results] = await dbConnection.promise().execute(query, [username]);
     return results[0];
   }
 
   static async getUserById(id) {
-    const query = `SELECT * FROM users WHERE id = ? LIMIT 1`;
+    // Dipakai buat verify token & refresh token - gak butuh password sama sekali.
+    const query =
+      'SELECT id, username, role, created_at FROM users WHERE id = ? LIMIT 1';
     const [results] = await dbConnection.promise().execute(query, [id]);
     return results[0];
   }
