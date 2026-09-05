@@ -170,7 +170,7 @@ export const deleteCustomerById = (req, res) => {
     ]);
   }
 
-  CustomersService.deleteCustomerById(id, (err, results) => {
+  CustomersService.deleteCustomerById(req, id, (err, results) => {
     if (err) {
       console.error('[DELETE CUSTOMER ERROR]', err);
       return internalErrorResponse(res, 'Gagal menghapus customer', err);
@@ -191,4 +191,92 @@ export const deleteCustomerById = (req, res) => {
       200
     );
   });
+};
+
+/**
+ * Mengembalikan pelanggan yang sebelumnya dihapus (soft delete)
+ * @param {Object} req - Request dari client
+ * @param {Object} res - Response dari server
+ */
+export const restoreCustomerById = (req, res) => {
+  const id = req.params.id;
+
+  const customerId = parseInt(id);
+  if (isNaN(customerId) || customerId < 1) {
+    return validationErrorResponse(res, [
+      'Customer ID harus berupa angka positif',
+    ]);
+  }
+
+  CustomersService.restoreCustomerById(req, id, (err, results) => {
+    if (err) {
+      console.error('[RESTORE CUSTOMER ERROR]', err);
+      return internalErrorResponse(res, 'Gagal mengembalikan customer', err);
+    }
+
+    if (results.affectedRows === 0) {
+      return notFoundErrorResponse(res, 'Customer yang sudah dihapus');
+    }
+
+    return successResponse(
+      res,
+      'Customer restored successfully',
+      { id: customerId },
+      null,
+      200
+    );
+  });
+};
+
+/**
+ * Mengambil daftar pelanggan yang sudah dihapus (soft delete)
+ * @param {Object} req - Request dari client
+ * @param {Object} res - Response dari server
+ */
+export const getDeletedCustomers = (req, res) => {
+  CustomersService.getDeletedCustomers((err, results) => {
+    if (err) {
+      console.error('[GET DELETED CUSTOMERS ERROR]', err);
+      return internalErrorResponse(
+        res,
+        'Gagal mengambil data customer terhapus',
+        err
+      );
+    }
+
+    return successResponse(
+      res,
+      'Deleted customers retrieved successfully',
+      results || [],
+      null,
+      200
+    );
+  });
+};
+
+/**
+ * Ringkasan pelanggan aktif/tidak aktif transaksi bulan ini - buat kartu
+ * di halaman Manajemen Pelanggan. Gak butuh tabel baru, dihitung on-the-fly
+ * dari tabel transactions yang udah ada.
+ * @param {Object} req - Request dari client
+ * @param {Object} res - Response dari server
+ */
+export const getActivitySummary = async (req, res) => {
+  try {
+    const activeCustomerIds = await CustomersService.getActivitySummary();
+    return successResponse(
+      res,
+      'Customer activity summary retrieved successfully',
+      { activeCustomerIds },
+      null,
+      200
+    );
+  } catch (error) {
+    console.error('[GET CUSTOMER ACTIVITY SUMMARY ERROR]', error);
+    return internalErrorResponse(
+      res,
+      'Gagal mengambil ringkasan aktivitas pelanggan',
+      error
+    );
+  }
 };

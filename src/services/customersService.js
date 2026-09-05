@@ -20,8 +20,39 @@ const CustomersService = {
     return CustomersModel.updateCustomerById(id, customerData, callback);
   },
 
-  deleteCustomerById: (customer_id, callback) => {
-    return CustomersModel.deleteCustomerById(customer_id, callback);
+  deleteCustomerById: (req, customer_id, callback) => {
+    return CustomersModel.deleteCustomerById(customer_id, (err, results) => {
+      if (!err && results.affectedRows > 0) {
+        logHelper(req, {
+          action: 'DELETE',
+          endpoint: '/customers/:id',
+          requestData: { customer_id },
+        });
+      }
+      return callback(err, results);
+    });
+  },
+
+  restoreCustomerById: (req, customer_id, callback) => {
+    return CustomersModel.restoreCustomerById(customer_id, (err, results) => {
+      if (!err && results.affectedRows > 0) {
+        logHelper(req, {
+          action: 'RESTORE',
+          endpoint: '/customers/restore/:id',
+          requestData: { customer_id },
+        });
+      }
+      return callback(err, results);
+    });
+  },
+
+  getDeletedCustomers: (callback) => {
+    return CustomersModel.getDeletedCustomers(callback);
+  },
+
+  getActivitySummary: async () => {
+    const activeIds = await CustomersModel.getActiveCustomerIdsThisMonth();
+    return activeIds;
   },
 
   getAllCustomers: (callback) => {

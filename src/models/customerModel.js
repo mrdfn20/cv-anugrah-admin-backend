@@ -6,14 +6,24 @@ const Customer = {
    * @param {Function} callback - Callback function untuk menangani hasil query
    */
   getAllCustomers: (callback) => {
-    const query = `SELECT cst.*, 
-                    gp.price, 
-                    sr.sub_region_name, 
-                    r.region_name
+    const query = `SELECT cst.*,
+                    gp.price,
+                    sr.sub_region_name,
+                    r.region_name,
+                    COALESCE(cb.balance, 0) AS balance,
+                    COALESCE((
+                      SELECT SUM(t.total_price - t.payment_amount)
+                      FROM transactions t
+                      WHERE t.customer_id = cst.id
+                        AND t.transaction_type = 'Hutang'
+                        AND t.deleted_at IS NULL
+                    ), 0) AS total_debt
                     FROM customers cst
                     LEFT JOIN gallon_prices gp ON cst.gallon_price_id = gp.id
                     LEFT JOIN sub_regions sr ON cst.sub_region_id = sr.id
-                    LEFT JOIN regions r ON sr.region_id = r.id`;
+                    LEFT JOIN regions r ON sr.region_id = r.id
+                    LEFT JOIN customer_balances cb ON cb.customer_id = cst.id
+                    WHERE cst.deleted_at IS NULL`;
     dbConnection.query(query, (err, results) => {
       if (err) return callback(err, null);
       return callback(null, results);
@@ -27,29 +37,40 @@ const Customer = {
    */
 
   getCustomerById: async (id) => {
-    const query = `SELECT cst.*, 
-                    gp.price, 
-                    sr.sub_region_name, 
-                    r.region_name
+    const query = `SELECT cst.*,
+                    gp.price,
+                    sr.sub_region_name,
+                    r.region_name,
+                    COALESCE(cb.balance, 0) AS balance,
+                    COALESCE((
+                      SELECT SUM(t.total_price - t.payment_amount)
+                      FROM transactions t
+                      WHERE t.customer_id = cst.id
+                        AND t.transaction_type = 'Hutang'
+                        AND t.deleted_at IS NULL
+                    ), 0) AS total_debt
                     FROM customers cst
                     LEFT JOIN gallon_prices gp ON cst.gallon_price_id = gp.id
                     LEFT JOIN sub_regions sr ON cst.sub_region_id = sr.id
                     LEFT JOIN regions r ON sr.region_id = r.id
-                    WHERE cst.id = ?`;
+                    LEFT JOIN customer_balances cb ON cb.customer_id = cst.id
+                    WHERE cst.id = ? AND cst.deleted_at IS NULL`;
     const [results] = await dbConnection.promise().execute(query, [id]);
     return results[0];
   },
 
   getCustomerByIdWithCallback: (id, callback) => {
-    const query = `SELECT cst.*, 
-                    gp.price, 
-                    sr.sub_region_name, 
-                    r.region_name
+    const query = `SELECT cst.*,
+                    gp.price,
+                    sr.sub_region_name,
+                    r.region_name,
+                    COALESCE(cb.balance, 0) AS balance
                     FROM customers cst
                     LEFT JOIN gallon_prices gp ON cst.gallon_price_id = gp.id
                     LEFT JOIN sub_regions sr ON cst.sub_region_id = sr.id
                     LEFT JOIN regions r ON sr.region_id = r.id
-                    WHERE cst.id = ?`;
+                    LEFT JOIN customer_balances cb ON cb.customer_id = cst.id
+                    WHERE cst.id = ? AND cst.deleted_at IS NULL`;
     dbConnection.query(query, [id], (err, results) => {
       if (err) return callback(err, null);
       if (results.length === 0) return callback(null, null); // Jika tidak ada hasil
@@ -171,12 +192,14 @@ const Customer = {
   },
 
   /**
-   * Menghapus pelanggan berdasarkan ID
+   * Menghapus pelanggan berdasarkan ID (soft delete - ditandai deleted_at,
+   * bukan beneran dihapus dari DB, supaya bisa di-restore kalau salah hapus).
    * @param {Number} id - ID pelanggan yang akan dihapus
    * @param {Function} callback - Callback function untuk menangani hasil query
    */
   deleteCustomerById: (id, callback) => {
-    const query = 'DELETE FROM customers WHERE id = ?';
+    const query =
+      'UPDATE customers SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL';
     dbConnection.query(query, [id], (err, results) => {
       if (err) return callback(err, null);
       return callback(null, {
@@ -184,6 +207,55 @@ const Customer = {
         affectedRows: results.affectedRows,
       });
     });
+  },
+
+  /**
+   * Mengembalikan pelanggan yang sebelumnya dihapus (soft delete).
+   * @param {Number} id - ID pelanggan yang akan di-restore
+   * @param {Function} callback - Callback function untuk menangani hasil query
+   */
+  restoreCustomerById: (id, callback) => {
+    const query =
+      'UPDATE customers SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL';
+    dbConnection.query(query, [id], (err, results) => {
+      if (err) return callback(err, null);
+      return callback(null, {
+        message: 'Customer restored successfully',
+        affectedRows: results.affectedRows,
+      });
+    });
+  },
+
+  /**
+   * Mengambil daftar pelanggan yang sudah dihapus (soft delete) - buat fitur restore.
+   * @param {Function} callback - Callback function untuk menangani hasil query
+   */
+  getDeletedCustomers: (callback) => {
+    const query = `SELECT id, title, customer_name, address, whatsapp_number, deleted_at
+                    FROM customers
+                    WHERE deleted_at IS NOT NULL
+                    ORDER BY deleted_at DESC`;
+    dbConnection.query(query, (err, results) => {
+      if (err) return callback(err, null);
+      return callback(null, results);
+    });
+  },
+
+  /**
+   * Daftar customer_id yang punya minimal 1 transaksi (non-deleted) di bulan
+   * berjalan - dipakai buat kartu "Pelanggan Aktif/Tidak Aktif Bulan Ini".
+   * Gak butuh tabel/relasi baru, murni query ke tabel transactions yg udah ada.
+   */
+  getActiveCustomerIdsThisMonth: async () => {
+    const query = `
+      SELECT DISTINCT customer_id
+      FROM transactions
+      WHERE deleted_at IS NULL
+        AND transaction_date >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+        AND transaction_date < DATE_FORMAT(CURDATE() + INTERVAL 1 MONTH, '%Y-%m-01')
+    `;
+    const [results] = await dbConnection.promise().execute(query);
+    return results.map((r) => r.customer_id);
   },
 };
 
