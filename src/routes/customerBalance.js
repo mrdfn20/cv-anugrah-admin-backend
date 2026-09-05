@@ -5,6 +5,7 @@ import {
   getCustomerBalanceById as getCustomerBalanceByIdController,
   updateCustomerBalance as updateCustomerBalanceController,
   addCustomerBalance as addCustomerBalanceController,
+  setCustomerBalance as setCustomerBalanceController,
 } from '../controllers/customerBalanceController.js';
 
 import authMiddleware from '../middlewares/authMiddleware.js';
@@ -30,6 +31,18 @@ router.put(
   authMiddleware,
   roleMiddleware(['Admin', 'Editor']),
   updateCustomerBalanceController
+);
+
+/**
+ * @route PUT /customerbalance/set
+ * @desc Mengoreksi (menimpa) saldo pelanggan ke nilai tertentu - bukan
+ * menambah. Khusus Admin krn ini override langsung, bukan alur normal.
+ */
+router.put(
+  '/set',
+  authMiddleware,
+  roleMiddleware(['Admin']),
+  setCustomerBalanceController
 );
 
 /**

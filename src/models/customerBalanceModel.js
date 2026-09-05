@@ -43,6 +43,24 @@ const CustomerBalance = {
   },
 
   /**
+   * Menimpa (set) saldo pelanggan langsung ke nilai tertentu - beda dari
+   * updateCustomerBalance() yang MENAMBAHKAN. Dipakai buat koreksi manual
+   * (misal admin salah input jumlah, atau saldo mau di-reset ke 0).
+   * @param {number} customer_id - ID pelanggan.
+   * @param {number} balance - Nilai saldo baru (final, bukan penambahan).
+   * @param {import('mysql2/promise').PoolConnection} [conn] - Koneksi transaction opsional.
+   */
+  setCustomerBalance: async (customer_id, balance, conn = defaultConn) => {
+    const query = `
+      INSERT INTO customer_balances (customer_id, balance)
+      VALUES (?, ?)
+      ON DUPLICATE KEY UPDATE balance = VALUES(balance)
+    `;
+    const [result] = await conn.execute(query, [customer_id, balance]);
+    return result;
+  },
+
+  /**
    * Mengurangi saldo pelanggan jika saldo mencukupi.
    * Sebelum pengurangan, akan dicek saldo yang tersedia.
    * @param {number} customer_id - ID pelanggan.

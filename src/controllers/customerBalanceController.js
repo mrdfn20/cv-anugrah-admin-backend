@@ -55,6 +55,53 @@ export const addCustomerBalance = async (req, res) => {
 };
 
 /**
+ * Menimpa (koreksi) saldo pelanggan langsung ke nilai tertentu - beda dari
+ * updateCustomerBalance yang MENAMBAHKAN. Dipakai buat kasus admin salah
+ * input jumlah, atau saldo mau di-reset ke 0.
+ * @param {Object} req - Request dari client.
+ * @param {Object} res - Response dari server.
+ */
+export const setCustomerBalance = async (req, res) => {
+  const { customer_id, balance } = req.body;
+
+  const validationErrors = [];
+  if (!customer_id || isNaN(customer_id)) {
+    validationErrors.push('Invalid customer ID');
+  }
+  if (balance === undefined || balance === null || isNaN(balance)) {
+    validationErrors.push('Invalid balance');
+  } else if (balance < 0) {
+    validationErrors.push('Balance cannot be negative');
+  }
+  if (validationErrors.length > 0) {
+    return validationErrorResponse(res, validationErrors);
+  }
+
+  try {
+    const customer = await CustomersService.getCustomerById(customer_id);
+    if (!customer) {
+      return notFoundErrorResponse(res, 'Customer');
+    }
+
+    await CustomerBalanceService.setCustomerBalance(req, {
+      customer_id,
+      balance,
+    });
+
+    return successResponse(
+      res,
+      'Customer balance corrected successfully',
+      { customer_id, balance },
+      null,
+      200
+    );
+  } catch (error) {
+    console.error('[SET CUSTOMER BALANCE ERROR]', error);
+    return internalErrorResponse(res, 'Gagal mengoreksi saldo pelanggan', error);
+  }
+};
+
+/**
  * Mengambil semua saldo pelanggan dari database.
  * @param {Object} req - Request dari client.
  * @param {Object} res - Response dari server.

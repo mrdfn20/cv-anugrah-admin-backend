@@ -47,6 +47,34 @@ const CostumerBalanceService = {
     return result;
   },
 
+  setCustomerBalance: async (req, { customer_id, balance }, conn) => {
+    const customerData = await CustomersService.getCustomerById(customer_id);
+
+    if (!customerData || customerData.length === 0) {
+      throw new Error('No customer found');
+    }
+
+    const previousBalance = await CustomerBalanceModel.getCustomerBalanceById(
+      customer_id,
+      conn
+    );
+
+    const result = await CustomerBalanceModel.setCustomerBalance(
+      customer_id,
+      balance,
+      conn
+    );
+
+    await logHelper(req, {
+      action: 'UPDATE',
+      endpoint: '/customerbalance/set',
+      requestData: { customer_id, balance },
+      previousData: previousBalance,
+    });
+
+    return result;
+  },
+
   reduceCustomerBalance: async (req, { customer_id, balanceUsed }, conn) => {
     // 1️⃣ Ambil balance pelanggan
     const balanceData = await CustomerBalanceModel.getCustomerBalanceById(
