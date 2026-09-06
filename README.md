@@ -102,8 +102,8 @@ All routes are prefixed with `/api`. Endpoints marked 🔒 require a valid JWT (
 
 ### Transactions (`/transactions`)
 
-- `GET /transactions` 🔒 — all transactions
-- `GET /transactions/filter` 🔒 — filter by customer/sub-region/date range/sort. Optional `page`/`limit` for server-side pagination (returns `{ data, meta.pagination }`); omit both to get the full unpaginated result (used by Reports).
+- `GET /transactions` 🔒 — all transactions, each including `total_paid`/`remaining_debt` computed live from `payment_logs` (not the `payment_amount` column, which is only set once at creation and never updated by later `payDebt` calls)
+- `GET /transactions/filter` 🔒 — filter by customer/sub-region/date range/sort, same live `total_paid`/`remaining_debt` fields. Optional `page`/`limit` for server-side pagination (returns `{ data, meta.pagination }`); omit both to get the full unpaginated result (used by Reports).
 - `GET /transactions/deleted` 🔒 — soft-deleted transactions (for restore UI)
 - `GET /transactions/:id` 🔒 · `GET /transactions/customer/:id` 🔒
 - `POST /transactions` 🔒 — create (Tunai auto-settles; Hutang applies customer balance first, then any overpayment is credited back to balance). Runs inside a DB transaction — if any step fails, everything rolls back.
@@ -114,7 +114,7 @@ All routes are prefixed with `/api`. Endpoints marked 🔒 require a valid JWT (
 
 - `GET /paymentlogs` 🔒 · `GET /paymentlogs/:id` 🔒 · `GET /paymentlogs/transaction/:id` 🔒
 - `GET /paymentlogs/getdebts` 🔒 — cross-customer debt list. Filters: `customer_id`, `customer_name`, `startDate`/`endDate`, `status` (`Lunas`/`Belum Lunas`), `sortBy` (`transaction_date`/`remaining_debt`), `sortOrder`. Optional `page`/`limit` for pagination.
-- `POST /paymentlogs` 🔒 · `POST /paymentlogs/paydebt` 🔒 — record a debt payment (also runs inside a DB transaction)
+- `POST /paymentlogs` 🔒 · `POST /paymentlogs/paydebt` 🔒 — record a debt payment (also runs inside a DB transaction); payment can exceed the remaining debt, with the excess automatically credited to the customer's balance, same as an overpaid new transaction
 
 ### Customer Balance (`/customerbalance`)
 
