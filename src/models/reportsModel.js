@@ -56,6 +56,72 @@ const ReportsModel = {
       remaining_debt: Number(debtRows[0].remaining_debt) || 0,
     };
   },
+
+  /**
+   * Ringkasan omzet & hutang per wilayah (kecamatan) dalam satu rentang tanggal.
+   * Pelanggan yang belum punya sub_region_id (belum dikategorikan) dikelompokkan
+   * sbg "Belum Ada Wilayah" - supaya total tetap utuh, gak diam2 ke-drop dari laporan.
+   * LEFT JOIN dipakai di semua level (customer->sub_region->region) justru karena itu.
+   */
+  async getSummaryByRegion(startDate, endDate) {
+    const salesQuery = `
+      SELECT
+        COALESCE(r.id, 0) AS region_id,
+        COALESCE(r.region_name, 'Belum Ada Wilayah') AS region_name,
+        COUNT(t.id) AS total_transactions,
+        IFNULL(SUM(t.payment_amount), 0) AS total_income,
+        IFNULL(SUM(t.total_price), 0) AS total_sales
+      FROM transactions t
+      JOIN customers c ON t.customer_id = c.id
+      LEFT JOIN sub_regions sr ON c.sub_region_id = sr.id
+      LEFT JOIN regions r ON sr.region_id = r.id
+      WHERE DATE(t.transaction_date) BETWEEN ? AND ?
+      AND t.deleted_at IS NULL
+      GROUP BY COALESCE(r.id, 0), COALESCE(r.region_name, 'Belum Ada Wilayah')
+    `;
+    const [salesRows] = await dbConnection
+      .promise()
+      .execute(salesQuery, [startDate, endDate]);
+
+    const debtQuery = `
+      SELECT region_id, region_name, SUM(remaining) AS remaining_debt FROM (
+        SELECT
+          COALESCE(r.id, 0) AS region_id,
+          COALESCE(r.region_name, 'Belum Ada Wilayah') AS region_name,
+          t.id,
+          t.total_price - IFNULL(SUM(pl.amount_paid), 0) AS remaining
+        FROM transactions t
+        JOIN customers c ON t.customer_id = c.id
+        LEFT JOIN sub_regions sr ON c.sub_region_id = sr.id
+        LEFT JOIN regions r ON sr.region_id = r.id
+        LEFT JOIN payment_logs pl
+          ON t.id = pl.transaction_id AND pl.deleted_at IS NULL
+        WHERE t.transaction_type = 'Hutang'
+        AND t.deleted_at IS NULL
+        AND DATE(t.transaction_date) BETWEEN ? AND ?
+        GROUP BY t.id, COALESCE(r.id, 0), COALESCE(r.region_name, 'Belum Ada Wilayah')
+      ) AS sub
+      GROUP BY region_id, region_name
+    `;
+    const [debtRows] = await dbConnection
+      .promise()
+      .execute(debtQuery, [startDate, endDate]);
+
+    const debtByRegion = new Map(
+      debtRows.map((r) => [r.region_id, Number(r.remaining_debt) || 0])
+    );
+
+    return salesRows
+      .map((r) => ({
+        region_id: r.region_id,
+        region_name: r.region_name,
+        total_transactions: Number(r.total_transactions) || 0,
+        total_income: Number(r.total_income) || 0,
+        total_sales: Number(r.total_sales) || 0,
+        remaining_debt: debtByRegion.get(r.region_id) || 0,
+      }))
+      .sort((a, b) => b.total_sales - a.total_sales);
+  },
 };
 
 export default ReportsModel;

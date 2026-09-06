@@ -16,4 +16,15 @@ router.get(
   ReportsController.getSummary
 );
 
+/**
+ * @route GET /reports/summary-by-region
+ * @desc Ringkasan omzet & hutang per wilayah (kecamatan) dalam satu rentang tanggal
+ */
+router.get(
+  '/summary-by-region',
+  authMiddleware,
+  roleMiddleware(['Admin', 'Editor']),
+  ReportsController.getSummaryByRegion
+);
+
 export default router;

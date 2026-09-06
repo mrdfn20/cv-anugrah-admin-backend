@@ -6,29 +6,32 @@ import {
   internalErrorResponse,
 } from '../helpers/responseHelper.js';
 
+function validateDateRange(startDate, endDate) {
+  const errors = [];
+  if (!startDate || !endDate) {
+    errors.push('startDate dan endDate wajib diisi');
+    return errors;
+  }
+  if (!moment(startDate, 'YYYY-MM-DD', true).isValid()) {
+    errors.push('Format startDate harus YYYY-MM-DD');
+  }
+  if (!moment(endDate, 'YYYY-MM-DD', true).isValid()) {
+    errors.push('Format endDate harus YYYY-MM-DD');
+  }
+  if (
+    errors.length === 0 &&
+    moment(startDate).isAfter(moment(endDate))
+  ) {
+    errors.push('startDate tidak boleh setelah endDate');
+  }
+  return errors;
+}
+
 export const getSummary = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
 
-    const validationErrors = [];
-    if (!startDate || !endDate) {
-      validationErrors.push('startDate dan endDate wajib diisi');
-    } else {
-      if (!moment(startDate, 'YYYY-MM-DD', true).isValid()) {
-        validationErrors.push('Format startDate harus YYYY-MM-DD');
-      }
-      if (!moment(endDate, 'YYYY-MM-DD', true).isValid()) {
-        validationErrors.push('Format endDate harus YYYY-MM-DD');
-      }
-      if (
-        moment(startDate, 'YYYY-MM-DD', true).isValid() &&
-        moment(endDate, 'YYYY-MM-DD', true).isValid() &&
-        moment(startDate).isAfter(moment(endDate))
-      ) {
-        validationErrors.push('startDate tidak boleh setelah endDate');
-      }
-    }
-
+    const validationErrors = validateDateRange(startDate, endDate);
     if (validationErrors.length > 0) {
       return validationErrorResponse(res, validationErrors);
     }
@@ -48,4 +51,32 @@ export const getSummary = async (req, res) => {
   }
 };
 
-export default { getSummary };
+export const getSummaryByRegion = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    const validationErrors = validateDateRange(startDate, endDate);
+    if (validationErrors.length > 0) {
+      return validationErrorResponse(res, validationErrors);
+    }
+
+    const summary = await ReportsService.getSummaryByRegion(startDate, endDate);
+
+    return successResponse(
+      res,
+      'Region report summary retrieved successfully',
+      summary,
+      null,
+      200
+    );
+  } catch (error) {
+    console.error('[GET REPORT SUMMARY BY REGION ERROR]', error);
+    return internalErrorResponse(
+      res,
+      'Gagal mengambil ringkasan laporan per wilayah',
+      error
+    );
+  }
+};
+
+export default { getSummary, getSummaryByRegion };
