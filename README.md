@@ -139,7 +139,7 @@ All routes are prefixed with `/api`. Endpoints marked 🔒 require a valid JWT (
 
 ### Reports (`/reports`)
 
-- `GET /reports/summary?startDate=&endDate=` 🔒 Admin/Editor — aggregate income/sales/debt for a custom date range (same income definition as the dashboard)
+- `GET /reports/summary?startDate=&endDate=&customerId=` 🔒 Admin/Editor — aggregate income/sales/debt for a custom date range (same income definition as the dashboard); optional `customerId` narrows it to a single customer's statement
 - `GET /reports/summary-by-region?startDate=&endDate=` 🔒 Admin/Editor — same aggregation broken down per region (kecamatan); customers with no `sub_region_id` are grouped under a synthetic `"Belum Ada Wilayah"` row rather than being silently excluded
 
 ### Dashboard (`/dashboard`)
