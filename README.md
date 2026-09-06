@@ -5,13 +5,14 @@ Backend API service for CV Anugrah Gemilang's internal water-gallon delivery man
 ## Features
 
 - 🔐 **JWT Authentication & Role-based Access Control** (Admin / Editor / Driver)
-- 👥 **Customer Management** (CRUD, photo via Google Drive link, sub-region/region hierarchy)
+- 👥 **Customer Management** (CRUD, photo via Google Drive link, sub-region/region hierarchy, soft-delete + restore, monthly activity summary, balance/outstanding-debt included in the list response for filtering)
 - 💰 **Transaction & Debt Processing** — Tunai/Hutang, customer balance auto-applied, overpayment auto-credited to balance, soft-delete + restore
-- 💳 **Customer Balance Management**
+- 💳 **Customer Balance Management** — incremental top-up (`PUT /customerbalance`) and an Admin-only hard "set to exact value" correction (`PUT /customerbalance/set`) for fixing mis-entered amounts or zeroing out a balance
 - 🚰 **Gallon Stock & Movement Tracking** (per-customer and global ledger with running balance)
 - 🧾 **Cross-customer Debt List** (`/paymentlogs/getdebts`)
 - 🚚 **Fleet Management** (Armada CRUD, guarded against deleting a fleet still referenced by transactions)
-- 📊 **Dashboard Analytics** & **Custom-range Reports**
+- 🗺️ **Region / Sub-region Management** (kecamatan / kompleks-desa CRUD, Admin-only writes, guarded against deleting a region with sub-regions or a sub-region with customers still attached)
+- 📊 **Dashboard Analytics** & **Custom-range Reports** (overall summary and a per-region omzet/debt breakdown)
 - 🔍 **Global Search**
 - 📝 **Audit Logging** (every create/update/delete recorded with before/after state)
 
@@ -77,7 +78,7 @@ npm test          # run once
 npm run test:watch  # watch mode
 ```
 
-30 Vitest unit tests cover the highest-risk logic — the financial services (`addTransaction`, `payDebt`, `customerBalanceService`), the DB transaction helper (commit/rollback behavior), and the auth/role middleware. Models are mocked; these are not full DB integration tests.
+51 Vitest unit tests cover the highest-risk logic — the financial services (`addTransaction`, `payDebt`, `customerBalanceService`), the DB transaction helper (commit/rollback behavior), the auth/role middleware, `armadaService`/`regionService` delete guards (rejecting deletion while still referenced), and `authService` (register/login/refresh). Models are mocked; these are not full DB integration tests.
 
 ## API Endpoints
 
@@ -93,7 +94,11 @@ All routes are prefixed with `/api`. Endpoints marked 🔒 require a valid JWT (
 
 ### Customers (`/customers`)
 
-- `GET /customers` 🔒 · `GET /customers/:id` 🔒 · `POST /customers` 🔒 · `PUT /customers/:id` 🔒 · `DELETE /customers/:id` 🔒 Admin
+- `GET /customers` 🔒 · `GET /customers/:id` 🔒 — both include `balance` and `total_debt` (sum of outstanding Hutang transactions) alongside the raw customer columns, for list-page filtering/display
+- `POST /customers` 🔒 · `PUT /customers/:id` 🔒 · `DELETE /customers/:id` 🔒 Admin — delete is a soft-delete (`deleted_at`), excluded from all normal `GET` results
+- `GET /customers/deleted` 🔒 Admin — soft-deleted customers, for a restore UI
+- `PUT /customers/restore/:id` 🔒 Admin — undo a soft-delete
+- `GET /customers/activity-summary` 🔒 — `{ activeCustomerIds }`: customers with at least one non-deleted transaction in the current calendar month (drives the "active/inactive this month" cards on the customer list)
 
 ### Transactions (`/transactions`)
 
@@ -114,6 +119,7 @@ All routes are prefixed with `/api`. Endpoints marked 🔒 require a valid JWT (
 ### Customer Balance (`/customerbalance`)
 
 - `GET /customerbalance` 🔒 · `GET /customerbalance/:id` 🔒 · `POST /customerbalance` 🔒 · `PUT /customerbalance` 🔒 (adds to existing balance, not a hard set)
+- `PUT /customerbalance/set` 🔒 Admin — overwrites the balance to an exact value (including `0`), for correcting a mis-entered top-up; rejects negative values
 
 ### Gallon (`/gallon`, `/gallonmovements`)
 
@@ -125,9 +131,16 @@ All routes are prefixed with `/api`. Endpoints marked 🔒 require a valid JWT (
 
 - `GET /armadas` 🔒 (Admin/Editor/Driver) · `POST /armadas` 🔒 Admin · `PUT /armadas/:id` 🔒 Admin · `DELETE /armadas/:id` 🔒 Admin (rejected with 409 if the fleet is still referenced by any transaction)
 
+### Region / Sub-region (`/regions`)
+
+- `GET /regions` 🔒 (Admin/Editor/Driver) · `POST /regions` 🔒 Admin · `PUT /regions/:id` 🔒 Admin · `DELETE /regions/:id` 🔒 Admin (rejected with 409 if it still has sub-regions)
+- `GET /regions/sub-regions` 🔒 (Admin/Editor/Driver) — includes the parent `region_name`/`region_type` via join
+- `POST /regions/sub-regions` 🔒 Admin · `PUT /regions/sub-regions/:id` 🔒 Admin · `DELETE /regions/sub-regions/:id` 🔒 Admin (rejected with 409 if any non-deleted customer still references it)
+
 ### Reports (`/reports`)
 
 - `GET /reports/summary?startDate=&endDate=` 🔒 Admin/Editor — aggregate income/sales/debt for a custom date range (same income definition as the dashboard)
+- `GET /reports/summary-by-region?startDate=&endDate=` 🔒 Admin/Editor — same aggregation broken down per region (kecamatan); customers with no `sub_region_id` are grouped under a synthetic `"Belum Ada Wilayah"` row rather than being silently excluded
 
 ### Dashboard (`/dashboard`)
 
