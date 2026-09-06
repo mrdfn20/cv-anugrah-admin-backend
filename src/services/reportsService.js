@@ -1,8 +1,8 @@
 import ReportsModel from '../models/reportsModel.js';
 
 const ReportsService = {
-  async getSummaryByPeriod(startDate, endDate) {
-    return await ReportsModel.getSummaryByPeriod(startDate, endDate);
+  async getSummaryByPeriod(startDate, endDate, customerId) {
+    return await ReportsModel.getSummaryByPeriod(startDate, endDate, customerId);
   },
 
   async getSummaryByRegion(startDate, endDate) {

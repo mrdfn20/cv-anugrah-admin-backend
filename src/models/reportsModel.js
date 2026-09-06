@@ -2,12 +2,19 @@ import dbConnection from '../config/db.js';
 
 const ReportsModel = {
   /**
-   * Ringkasan transaksi dalam satu rentang tanggal (inklusif).
+   * Ringkasan transaksi dalam satu rentang tanggal (inklusif), opsional
+   * dipersempit ke 1 pelanggan (customerId) - dipakai jg buat "laporan per
+   * pelanggan" (statement) di FE, endpoint yg sama tinggal ditambah customer_id.
    * Definisi "pendapatan" ikut konvensi dashboardModel.getIncomeSummary():
    * SUM(payment_amount) berdasar transaction_date, bukan payment_logs.payment_date -
    * supaya konsisten dengan angka yang sudah ditampilkan di Dashboard.
    */
-  async getSummaryByPeriod(startDate, endDate) {
+  async getSummaryByPeriod(startDate, endDate, customerId) {
+    const customerFilter = customerId ? 'AND customer_id = ?' : '';
+    const summaryParams = customerId
+      ? [startDate, endDate, customerId]
+      : [startDate, endDate];
+
     const summaryQuery = `
       SELECT
         COUNT(*) AS total_transactions,
@@ -19,13 +26,17 @@ const ReportsModel = {
       FROM transactions
       WHERE DATE(transaction_date) BETWEEN ? AND ?
       AND deleted_at IS NULL
+      ${customerFilter}
     `;
-    const [summaryRows] = await dbConnection
-      .promise()
-      .execute(summaryQuery, [startDate, endDate]);
+    const [summaryRows] = await dbConnection.promise().execute(summaryQuery, summaryParams);
 
     // Sisa hutang dari transaksi Hutang yang DIBUAT dalam periode ini
     // (bisa saja baru lunas setelah periode berakhir - ini snapshot saat ini).
+    const debtCustomerFilter = customerId ? 'AND t.customer_id = ?' : '';
+    const debtParams = customerId
+      ? [startDate, endDate, customerId]
+      : [startDate, endDate];
+
     const remainingDebtQuery = `
       SELECT SUM(remaining) AS remaining_debt FROM (
         SELECT
@@ -37,12 +48,11 @@ const ReportsModel = {
         WHERE t.transaction_type = 'Hutang'
         AND t.deleted_at IS NULL
         AND DATE(t.transaction_date) BETWEEN ? AND ?
+        ${debtCustomerFilter}
         GROUP BY t.id
       ) AS sub
     `;
-    const [debtRows] = await dbConnection
-      .promise()
-      .execute(remainingDebtQuery, [startDate, endDate]);
+    const [debtRows] = await dbConnection.promise().execute(remainingDebtQuery, debtParams);
 
     const summary = summaryRows[0];
 

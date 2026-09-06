@@ -29,14 +29,21 @@ function validateDateRange(startDate, endDate) {
 
 export const getSummary = async (req, res) => {
   try {
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, customerId } = req.query;
 
     const validationErrors = validateDateRange(startDate, endDate);
+    if (customerId && isNaN(parseInt(customerId))) {
+      validationErrors.push('customerId harus berupa angka');
+    }
     if (validationErrors.length > 0) {
       return validationErrorResponse(res, validationErrors);
     }
 
-    const summary = await ReportsService.getSummaryByPeriod(startDate, endDate);
+    const summary = await ReportsService.getSummaryByPeriod(
+      startDate,
+      endDate,
+      customerId ? parseInt(customerId) : undefined
+    );
 
     return successResponse(
       res,
