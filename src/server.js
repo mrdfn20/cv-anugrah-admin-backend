@@ -33,6 +33,7 @@ import searchRoutes from './routes/search.js';
 import auditLogs from './routes/auditLogs.js';
 import reportsRoutes from './routes/reports.js';
 import armadaRoutes from './routes/armada.js';
+import regionRoutes from './routes/regions.js';
 
 // Middleware Configuration
 app.use(helmet()); // Security headers standar (CSP, X-Content-Type-Options, dll)
@@ -96,6 +97,7 @@ app.use('/api/search', searchRoutes);
 app.use('/api/auditlogs', auditLogs);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/armadas', armadaRoutes);
+app.use('/api/regions', regionRoutes);
 
 // Default Route
 app.get('/', (req, res) => {
