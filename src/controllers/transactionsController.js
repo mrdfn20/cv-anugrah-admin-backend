@@ -113,6 +113,11 @@ export const addTransaction = async (req, res) => {
       gallon_empty: parseInt(gallon_empty),
       gallon_returned: parseInt(gallon_returned),
       armada_id: parseInt(armada_id),
+      // transaction_date disimpan via SQL NOW() saat INSERT (bukan hasil query balik) -
+      // format waktu sekarang dgn cara yg sama persis kayak getTransactionsByFilter,
+      // supaya baris yg baru ditambahkan ke tabel FE (tanpa reload) punya tanggal yg benar,
+      // bukan kosong/undefined.
+      transaction_date: moment().tz('Asia/Jakarta').format('YYYY-MM-DD'),
       created_at: moment
         .utc(results.created_at)
         .tz('Asia/Jakarta')

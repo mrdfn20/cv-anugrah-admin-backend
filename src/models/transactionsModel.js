@@ -81,10 +81,26 @@ const Transactions = {
   },
 
   /**
-   * Mengambil semua transaksi dari database
+   * Mengambil semua transaksi dari database, plus total_paid/remaining_debt yang
+   * dihitung LIVE dari payment_logs - bukan cuma kolom transactions.payment_amount
+   * yang di-set sekali doang pas transaksi dibuat dan gak pernah diupdate lagi
+   * kalau ada pembayaran hutang belakangan (via payDebt). Tanpa ini, transaksi
+   * Hutang yang udah lunas dibayar belakangan tetap kelihatan "belum lunas" di
+   * tabel Transaksi walau tabel Hutang sudah benar.
+   * Tunai selalu dianggap lunas penuh (gak pernah ada baris payment_logs buat Tunai).
    */
   getTransactions: async () => {
-    const query = `SELECT * FROM transactions WHERE deleted_at IS NULL`;
+    const query = `
+      SELECT t.*,
+        CASE WHEN t.transaction_type = 'Tunai' THEN t.total_price
+             ELSE COALESCE(SUM(pl.amount_paid), 0) END AS total_paid,
+        CASE WHEN t.transaction_type = 'Tunai' THEN 0
+             ELSE (t.total_price - COALESCE(SUM(pl.amount_paid), 0)) END AS remaining_debt
+      FROM transactions t
+      LEFT JOIN payment_logs pl ON t.id = pl.transaction_id AND pl.deleted_at IS NULL
+      WHERE t.deleted_at IS NULL
+      GROUP BY t.id
+    `;
     const [results] = await dbConnection.promise().execute(query);
     return results;
   },
@@ -198,6 +214,7 @@ const Transactions = {
       FROM transactions t
       JOIN customers c ON t.customer_id = c.id
       LEFT JOIN sub_regions sr ON c.sub_region_id = sr.id
+      LEFT JOIN payment_logs pl ON t.id = pl.transaction_id AND pl.deleted_at IS NULL
       WHERE ${whereClauses.join(' AND ')}
     `;
 
@@ -211,12 +228,23 @@ const Transactions = {
       orderByClause += ` ${sortOrder}`;
     }
 
-    let query = `SELECT t.* ${fromAndWhere}${orderByClause}`;
+    // total_paid/remaining_debt dihitung LIVE dari payment_logs (bukan kolom
+    // transactions.payment_amount yang beku) - lihat catatan di getTransactions().
+    const selectColumns = `
+      t.*,
+      CASE WHEN t.transaction_type = 'Tunai' THEN t.total_price
+           ELSE COALESCE(SUM(pl.amount_paid), 0) END AS total_paid,
+      CASE WHEN t.transaction_type = 'Tunai' THEN 0
+           ELSE (t.total_price - COALESCE(SUM(pl.amount_paid), 0)) END AS remaining_debt
+    `;
+    let query = `SELECT ${selectColumns} ${fromAndWhere} GROUP BY t.id${orderByClause}`;
     const selectParams = [...queryParams];
 
     let total = null;
     if (limit) {
-      const countQuery = `SELECT COUNT(*) AS total ${fromAndWhere}`;
+      // COUNT butuh query terpisah tanpa GROUP BY per transaksi (JOIN payment_logs bisa
+      // gandain baris kalau dihitung langsung) - hitung dari subquery daftar id unik.
+      const countQuery = `SELECT COUNT(*) AS total FROM (SELECT t.id ${fromAndWhere} GROUP BY t.id) AS sub`;
       const [countResult] = await dbConnection
         .promise()
         .execute(countQuery, queryParams);
