@@ -52,7 +52,7 @@ app.use(
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
-  })
+  }),
 ); // Mengizinkan akses API dari domain lain (CORS)
 app.use(bodyParser.urlencoded({ extended: false })); // Parsing request dengan format application/x-www-form-urlencoded
 app.use(bodyParser.json()); // Parsing request dengan format JSON
@@ -80,7 +80,7 @@ app.use(
       respontime: `${tokens['response-time'](req, res)} ms - `,
       userAgent: tokens['user-agent'](req, res), // Ini untuk aplikasi/browser
     });
-  })
+  }),
 );
 
 // API Routing
