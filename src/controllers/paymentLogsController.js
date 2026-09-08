@@ -139,6 +139,60 @@ export const getDebtsByfilter = async (req, res) => {
 };
 
 /**
+ * Ringkasan (count + total sisa hutang) hutang berdasarkan filter - TANPA paginasi.
+ * Dipakai buat kartu ringkasan halaman Hutang, biar angkanya gak tergantung berapa
+ * banyak yang udah ke-load lewat infinite scroll (lihat catatan di paymentLogsModel.js).
+ * @param {Object} req - Request dari client.
+ * @param {Object} res - Response dari server.
+ */
+export const getDebtsSummary = async (req, res) => {
+  try {
+    let { transaction_id, customer_id, customer_name, startDate, endDate, status } = req.query;
+
+    const validationErrors = [];
+
+    if (transaction_id) {
+      transaction_id = parseInt(transaction_id);
+      if (isNaN(transaction_id)) validationErrors.push('Invalid transaction ID');
+    }
+
+    if (customer_id) {
+      customer_id = parseInt(customer_id);
+      if (isNaN(customer_id)) validationErrors.push('Invalid customer ID');
+    }
+
+    if (
+      (startDate && !moment(startDate, 'YYYY-MM-DD', true).isValid()) ||
+      (endDate && !moment(endDate, 'YYYY-MM-DD', true).isValid())
+    ) {
+      validationErrors.push('Format tanggal tidak valid. Gunakan YYYY-MM-DD');
+    }
+
+    if (status && status !== 'Lunas' && status !== 'Belum Lunas') {
+      validationErrors.push('Invalid status');
+    }
+
+    if (validationErrors.length > 0) {
+      return validationErrorResponse(res, validationErrors);
+    }
+
+    const summary = await PaymentLogsService.getDebtsSummary({
+      transaction_id,
+      customer_id,
+      customer_name,
+      startDate,
+      endDate,
+      status,
+    });
+
+    return successResponse(res, 'Debts summary retrieved successfully', summary, null, 200);
+  } catch (error) {
+    console.error('[GET DEBTS SUMMARY ERROR]', error);
+    return internalErrorResponse(res, 'Gagal mengambil ringkasan hutang', error);
+  }
+};
+
+/**
  * Menambahkan log pembayaran baru ke database.
  * @param {Object} req - Request dari client.
  * @param {Object} res - Response dari server.

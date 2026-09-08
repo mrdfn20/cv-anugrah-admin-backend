@@ -142,6 +142,10 @@ const PaymentLogService = {
     return results;
   },
 
+  getDebtsSummary: async (filters) => {
+    return await PaymentLogsModel.getDebtsSummary(filters);
+  },
+
   deletePaymentLogByTransactionId: async (transaction_id, req) => {
     const result = await PaymentLogsModel.deletePaymentLogByTransactionId(
       transaction_id

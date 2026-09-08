@@ -3,6 +3,7 @@ const router = express.Router();
 import {
   payDebt as payDebtController,
   getDebtsByfilter as getDebtsController,
+  getDebtsSummary as getDebtsSummaryController,
   addPaymentLogs as addPaymentLogsController,
   getAllPaymentLogs as getAllPaymentLogsController,
   getPaymentLogById as getPaymentLogByIdController,
@@ -22,6 +23,19 @@ router.get(
   authMiddleware,
   roleMiddleware(['Admin', 'Editor', 'Driver']),
   getDebtsController
+);
+
+/**
+ * @route GET /paymentlogs/getdebts/summary
+ * @desc Ringkasan (count + total sisa hutang) hutang berdasarkan filter yang sama kayak
+ * /getdebts - TANPA paginasi. Dipakai kartu ringkasan halaman Hutang (lihat catatan di
+ * controllers/paymentLogsController.js soal kenapa ini perlu, bukan dihitung di frontend).
+ */
+router.get(
+  '/getdebts/summary',
+  authMiddleware,
+  roleMiddleware(['Admin', 'Editor', 'Driver']),
+  getDebtsSummaryController
 );
 
 /**

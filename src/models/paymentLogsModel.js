@@ -23,23 +23,20 @@ const PaymentLogs = {
   },
 
   /**
-   * Mengambil daftar hutang berdasarkan filter tertentu
-   * `page`/`limit` OPSIONAL - kalau gak dikirim, balikin SEMUA hutang yang cocok filter
-   * (perilaku lama) sbg array biasa. Kalau dikirim, return `{ data, total }`.
-   * @param {Object} params - Filter yang digunakan (transaction_id, customer_id, dll.)
+   * Bangun bagian SELECT+WHERE+GROUP BY+HAVING yang dipakai bareng oleh getDebtsByfilter
+   * (list, dipaginasi) & getDebtsSummary (agregat count+total, TANPA paginasi) - satu
+   * sumber logic filter, biar angka summary DIJAMIN konsisten sama isi list-nya (gak ada
+   * lagi "summary dihitung dari halaman yang kebetulan udah ke-load doang").
+   * @private
    */
-  getDebtsByfilter: async (
+  _buildDebtsCoreSelect: ({
     transaction_id,
     customer_id,
     customer_name,
     startDate,
     endDate,
     status,
-    sortBy,
-    sortOrder,
-    page,
-    limit
-  ) => {
+  }) => {
     const whereClauses = [`t.transaction_type = 'Hutang'`, 't.deleted_at IS NULL'];
     const queryParams = [];
 
@@ -98,6 +95,36 @@ const PaymentLogs = {
       GROUP BY t.id, t.customer_id, t.total_price, t.created_by_role${havingClause}
     `;
 
+    return { coreSelect, queryParams };
+  },
+
+  /**
+   * Mengambil daftar hutang berdasarkan filter tertentu
+   * `page`/`limit` OPSIONAL - kalau gak dikirim, balikin SEMUA hutang yang cocok filter
+   * (perilaku lama) sbg array biasa. Kalau dikirim, return `{ data, total }`.
+   * @param {Object} params - Filter yang digunakan (transaction_id, customer_id, dll.)
+   */
+  getDebtsByfilter: async function (
+    transaction_id,
+    customer_id,
+    customer_name,
+    startDate,
+    endDate,
+    status,
+    sortBy,
+    sortOrder,
+    page,
+    limit
+  ) {
+    const { coreSelect, queryParams } = this._buildDebtsCoreSelect({
+      transaction_id,
+      customer_id,
+      customer_name,
+      startDate,
+      endDate,
+      status,
+    });
+
     let orderByClause = ' ORDER BY t.transaction_date';
     if (sortBy === 'remaining_debt') {
       orderByClause = ' ORDER BY remaining_debt';
@@ -134,6 +161,44 @@ const PaymentLogs = {
     }));
 
     return limit ? { data: mapped, total } : mapped;
+  },
+
+  /**
+   * Ringkasan (count + total sisa hutang) yang cocok sama filter - TANPA paginasi. Dipakai
+   * buat kartu ringkasan di halaman Hutang, yang sebelumnya (bug) dihitung dari data yang
+   * kebetulan udah ke-load lewat infinite scroll doang - jadi kelihatan lebih kecil dari
+   * angka sebenarnya sebelum di-scroll sampai habis. Pakai WHERE/filter yang PERSIS sama
+   * kayak getDebtsByfilter (lewat _buildDebtsCoreSelect yang sama) biar angkanya konsisten.
+   * @param {Object} params - Filter yang sama kayak getDebtsByfilter (minus page/limit/sort)
+   * @returns {Promise<{count: number, totalRemaining: number}>}
+   */
+  getDebtsSummary: async function ({
+    transaction_id,
+    customer_id,
+    customer_name,
+    startDate,
+    endDate,
+    status,
+  }) {
+    const { coreSelect, queryParams } = this._buildDebtsCoreSelect({
+      transaction_id,
+      customer_id,
+      customer_name,
+      startDate,
+      endDate,
+      status,
+    });
+
+    const summaryQuery = `
+      SELECT COUNT(*) AS count, COALESCE(SUM(remaining_debt), 0) AS totalRemaining
+      FROM (${coreSelect}) AS sub
+    `;
+    const [result] = await dbConnection.promise().execute(summaryQuery, queryParams);
+
+    return {
+      count: result[0].count,
+      totalRemaining: Number(result[0].totalRemaining),
+    };
   },
 
   /**
