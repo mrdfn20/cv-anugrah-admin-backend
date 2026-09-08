@@ -163,8 +163,9 @@ const PaymentLogService = {
     );
 
     // ✅ Logging setelah berhasil restore
-    await logHelper({
-      req,
+    // 🐛 BUG lama: logHelper({ req, ... }) - req jadi wrapper object tanpa .user.
+    // logHelper(req, options) - req argumen sendiri.
+    await logHelper(req, {
       action: 'RESTORE',
       endpoint: '/paymentlogs/restore',
       requestData: { transaction_id },

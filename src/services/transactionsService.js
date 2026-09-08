@@ -218,8 +218,10 @@ const TransactionService = {
       throw new Error('Transaction not found or already active');
     }
 
-    await logHelper({
-      req,
+    // 🐛 BUG lama: dipanggil logHelper({ req, ... }) - req jadi wrapper object tanpa
+    // .user, bukan request asli -> "Cannot destructure property 'id' of req.user" tiap
+    // ada yang restore transaksi. logHelper(req, options) - req harus argumen sendiri.
+    await logHelper(req, {
       action: 'RESTORE',
       endpoint: '/transactions/restore/:id',
       requestData: { transaction_id },
