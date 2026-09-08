@@ -138,6 +138,52 @@ class DashboardModel {
     const [rows] = await dbConnection.promise().execute(query);
     return rows[0];
   }
+
+  /**
+   * Ringkasan "Hari Ini" khusus buat 1 Driver (dibedain lewat created_by_user_id, BUKAN
+   * created_by_role - biar Anto & Aan masing2 liat punya dia sendiri, gak digabung).
+   * Gabung 2 sumber uang masuk yang gak overlap:
+   * 1) transactions.payment_amount - uang diterima pas ngirim galon HARI INI (baik Tunai
+   *    penuh maupun bayar sebagian di Hutang).
+   * 2) payment_logs.amount_paid - uang diterima dari NAGIH hutang LAMA hari ini
+   *    (payment_date-nya kosong/NULL kalau itu baris hutang baru yg dibikin bareng
+   *    transaksi - lihat transactionsService.js - jadi otomatis gak ke-hitung dobel).
+   * @param {Number} userId - req.user.id dari JWT (Driver yang login)
+   */
+  static async getDriverSummaryToday(userId) {
+    const txQuery = `
+      SELECT
+        COUNT(*) AS total_transactions,
+        IFNULL(SUM(gallon_filled), 0) AS total_gallons_filled,
+        IFNULL(SUM(payment_amount), 0) AS cash_from_transactions
+      FROM transactions
+      WHERE created_by_user_id = ? AND DATE(transaction_date) = CURDATE() AND deleted_at IS NULL
+    `;
+    const payQuery = `
+      SELECT
+        COUNT(*) AS total_debt_payments,
+        IFNULL(SUM(amount_paid), 0) AS cash_from_debt_payments
+      FROM payment_logs
+      WHERE created_by_user_id = ? AND DATE(payment_date) = CURDATE() AND deleted_at IS NULL
+    `;
+
+    const [txRows] = await dbConnection.promise().execute(txQuery, [userId]);
+    const [payRows] = await dbConnection.promise().execute(payQuery, [userId]);
+    const tx = txRows[0];
+    const pay = payRows[0];
+
+    const cashFromTransactions = Number(tx.cash_from_transactions);
+    const cashFromDebtPayments = Number(pay.cash_from_debt_payments);
+
+    return {
+      total_transactions: tx.total_transactions,
+      total_gallons_filled: tx.total_gallons_filled,
+      cash_from_transactions: cashFromTransactions,
+      total_debt_payments: pay.total_debt_payments,
+      cash_from_debt_payments: cashFromDebtPayments,
+      total_cash_collected: cashFromTransactions + cashFromDebtPayments,
+    };
+  }
 }
 
 export default DashboardModel;

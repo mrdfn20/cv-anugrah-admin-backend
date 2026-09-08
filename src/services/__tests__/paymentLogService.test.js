@@ -158,7 +158,8 @@ describe('paymentLogService.payDebt', () => {
       expect.any(String),
       10000,
       { fakeConn: true },
-      'Driver'
+      'Driver',
+      9
     );
   });
 

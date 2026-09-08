@@ -6,7 +6,7 @@ Backend API service for CV Anugrah Gemilang's internal water-gallon delivery man
 
 - 🔐 **JWT Authentication & Role-based Access Control** (Admin / Editor / Driver) — Driver can now create transactions, pay debts, and add customer balance directly (previously read-only); every write those 3 endpoints do carries who did it, so it stays reviewable rather than needing a pre-commit approval gate
 - 👥 **Customer Management** (CRUD, photo via Google Drive link, sub-region/region hierarchy, soft-delete + restore, monthly activity summary, balance/outstanding-debt included in the list response for filtering)
-- 💰 **Transaction & Debt Processing** — Tunai/Hutang, customer balance auto-applied, overpayment auto-credited to balance, soft-delete + restore. `transactions`/`payment_logs` carry a `created_by_role` column (nullable, purely informational — never filtered on) so the frontend can badge Driver-submitted records
+- 💰 **Transaction & Debt Processing** — Tunai/Hutang, customer balance auto-applied, overpayment auto-credited to balance, soft-delete + restore. `transactions`/`payment_logs` carry `created_by_role` and `created_by_user_id` columns (both nullable, purely informational — never filtered on except by the Driver Dashboard's own summary, see below) so the frontend can badge Driver-submitted records and each Driver can see their own daily numbers
 - 💳 **Customer Balance Management** — incremental top-up (`PUT /customerbalance`, open to Admin/Editor/Driver) and an Admin-only hard "set to exact value" correction (`PUT /customerbalance/set`) for fixing mis-entered amounts or zeroing out a balance
 - 🚰 **Gallon Stock & Movement Tracking** (per-customer and global ledger with running balance)
 - 🧾 **Cross-customer Debt List** (`/paymentlogs/getdebts`)
@@ -114,6 +114,8 @@ All routes are prefixed with `/api`. Endpoints marked 🔒 require a valid JWT (
 
 - `GET /paymentlogs` 🔒 · `GET /paymentlogs/:id` 🔒 · `GET /paymentlogs/transaction/:id` 🔒
 - `GET /paymentlogs/getdebts` 🔒 — cross-customer debt list. Filters: `customer_id`, `customer_name`, `startDate`/`endDate`, `status` (`Lunas`/`Belum Lunas`), `sortBy` (`transaction_date`/`remaining_debt`), `sortOrder`. Optional `page`/`limit` for pagination.
+- `GET /paymentlogs/getdebts/summary` 🔒 — count + total remaining debt matching the same filters as `/getdebts`, without pagination (same underlying query, so it always agrees with the list — used for the Hutang page's summary cards instead of summing whatever page happens to be loaded)
+- `GET /paymentlogs/priority-debts?limit=10` 🔒 — top N customers by total outstanding debt (summed across all their unpaid transactions, not per-transaction), for the Driver Dashboard's "Prioritas Tagih" card
 - `POST /paymentlogs` 🔒 · `POST /paymentlogs/paydebt` 🔒 — record a debt payment (also runs inside a DB transaction); payment can exceed the remaining debt, with the excess automatically credited to the customer's balance, same as an overpaid new transaction
 
 ### Customer Balance (`/customerbalance`)
@@ -144,7 +146,8 @@ All routes are prefixed with `/api`. Endpoints marked 🔒 require a valid JWT (
 
 ### Dashboard (`/dashboard`)
 
-- `GET /dashboard/summary` 🔒 · `/income-summary` 🔒 · `/gallon-summary` 🔒 · `/active-customers` 🔒 · `/debt-status` 🔒 · `/today-activity` 🔒
+- `GET /dashboard/summary` 🔒 · `/income-summary` 🔒 · `/gallon-summary` 🔒 · `/active-customers` 🔒 · `/debt-status` 🔒 · `/today-activity` 🔒 — Admin/Editor only, cached server-side 30s
+- `GET /dashboard/driver-summary` 🔒 Driver only — "Ringkasan Hari Ini" scoped to the calling Driver (`req.user.id`), NOT cached (the other `/dashboard/*` endpoints are cached by URL only, which would leak one driver's numbers to another if applied here)
 
 ### Search (`/search`)
 

@@ -193,6 +193,31 @@ export const getDebtsSummary = async (req, res) => {
 };
 
 /**
+ * Daftar pelanggan dengan hutang paling menumpuk (diurutkan dari terbesar) - buat kartu
+ * "Prioritas Tagih" di Dashboard Driver.
+ * @param {Object} req - Request dari client. Query opsional: limit (default 10).
+ * @param {Object} res - Response dari server.
+ */
+export const getPriorityDebts = async (req, res) => {
+  try {
+    let { limit } = req.query;
+
+    if (limit) {
+      limit = parseInt(limit);
+      if (isNaN(limit) || limit < 1) {
+        return validationErrorResponse(res, ['Limit harus berupa angka positif']);
+      }
+    }
+
+    const priorityDebts = await PaymentLogsService.getPriorityDebts(limit);
+    return successResponse(res, 'Priority debts retrieved successfully', priorityDebts, null, 200);
+  } catch (error) {
+    console.error('[GET PRIORITY DEBTS ERROR]', error);
+    return internalErrorResponse(res, 'Gagal mengambil daftar hutang prioritas', error);
+  }
+};
+
+/**
  * Menambahkan log pembayaran baru ke database.
  * @param {Object} req - Request dari client.
  * @param {Object} res - Response dari server.

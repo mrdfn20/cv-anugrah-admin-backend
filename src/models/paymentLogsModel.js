@@ -202,6 +202,40 @@ const PaymentLogs = {
   },
 
   /**
+   * Daftar pelanggan dengan hutang paling menumpuk (dijumlah per pelanggan, bukan per
+   * transaksi), diurutkan dari yang paling besar - dipakai fitur Dashboard Driver
+   * ("prioritas tagih") biar Driver tau siapa yang paling perlu didatangin duluan.
+   * Reuse `_buildDebtsCoreSelect({ status: 'Belum Lunas' })` yang sama kayak
+   * getDebtsByfilter/getDebtsSummary, biar angkanya selalu konsisten sama halaman Hutang.
+   * @param {Number} [limit=10]
+   */
+  getPriorityDebts: async function (limit = 10) {
+    const { coreSelect, queryParams } = this._buildDebtsCoreSelect({
+      status: 'Belum Lunas',
+    });
+
+    const safeLimit = Math.max(parseInt(limit) || 10, 1);
+    // LIMIT diselipkan langsung (bukan placeholder `?`) - sama alasannya kayak di
+    // getDebtsByfilter: aman krn safeLimit sudah integer positif tervalidasi.
+    const query = `
+      SELECT
+        sub.customer_id,
+        c.customer_name,
+        c.whatsapp_number,
+        SUM(sub.remaining_debt) AS total_debt,
+        COUNT(*) AS debt_count
+      FROM (${coreSelect}) AS sub
+      JOIN customers c ON c.id = sub.customer_id
+      GROUP BY sub.customer_id, c.customer_name, c.whatsapp_number
+      ORDER BY total_debt DESC
+      LIMIT ${safeLimit}
+    `;
+
+    const [rows] = await dbConnection.promise().execute(query, queryParams);
+    return rows.map((r) => ({ ...r, total_debt: Number(r.total_debt) }));
+  },
+
+  /**
    * Menghapus catatan pembayaran berdasarkan ID transaksi
    * @param {Number} transaction_id - ID transaksi yang akan dihapus
    */
@@ -243,11 +277,12 @@ const PaymentLogs = {
     payment_date,
     amount_paid,
     conn,
-    created_by_role = null
+    created_by_role = null,
+    created_by_user_id = null
   ) => {
     const queryInsert = `
-      INSERT INTO payment_logs (transaction_id, customer_id, owe_date, payment_date, amount_paid, created_by_role)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO payment_logs (transaction_id, customer_id, owe_date, payment_date, amount_paid, created_by_role, created_by_user_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
 
     const executor = conn || dbConnection.promise();
@@ -258,6 +293,7 @@ const PaymentLogs = {
       payment_date || null,
       amount_paid || 0,
       created_by_role,
+      created_by_user_id,
     ]);
 
     return results;

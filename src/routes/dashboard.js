@@ -56,4 +56,16 @@ router.get(
   DashboardController.getTodayActivity
 );
 
+// 🆕 Dashboard Driver ("Ringkasan Hari Ini") - Driver only, datanya scoped ke
+// req.user.id sendiri (Anto gak bisa lihat punya Aan). SENGAJA gak dipasang
+// dashboardCache di sini - cache-nya di-key dari originalUrl doang (bukan per-user),
+// kalau dipasang, Driver yang buka duluan bakal "membocorkan" angkanya ke Driver lain
+// yang buka endpoint yang sama dalam 30 detik. Lihat cacheMiddleware.js.
+router.get(
+  '/driver-summary',
+  authMiddleware,
+  roleMiddleware(['Driver']),
+  DashboardController.getDriverSummary
+);
+
 export default router;

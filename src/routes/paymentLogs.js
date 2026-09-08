@@ -4,6 +4,7 @@ import {
   payDebt as payDebtController,
   getDebtsByfilter as getDebtsController,
   getDebtsSummary as getDebtsSummaryController,
+  getPriorityDebts as getPriorityDebtsController,
   addPaymentLogs as addPaymentLogsController,
   getAllPaymentLogs as getAllPaymentLogsController,
   getPaymentLogById as getPaymentLogByIdController,
@@ -36,6 +37,18 @@ router.get(
   authMiddleware,
   roleMiddleware(['Admin', 'Editor', 'Driver']),
   getDebtsSummaryController
+);
+
+/**
+ * @route GET /paymentlogs/priority-debts
+ * @desc Daftar pelanggan dengan hutang paling menumpuk (diurutkan terbesar) - buat
+ * kartu "Prioritas Tagih" di Dashboard Driver. Query opsional: ?limit=10
+ */
+router.get(
+  '/priority-debts',
+  authMiddleware,
+  roleMiddleware(['Admin', 'Editor', 'Driver']),
+  getPriorityDebtsController
 );
 
 /**

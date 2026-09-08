@@ -60,6 +60,12 @@ class DashboardService {
   static async getTodayActivity() {
     return await DashboardModel.getTodayActivity();
   }
+
+  // Endpoint: /driver-summary - scoped ke 1 Driver (req.user.id), lihat catatan
+  // di DashboardModel.getDriverSummaryToday soal kenapa gak lewat cacheMiddleware.
+  static async getDriverSummary(userId) {
+    return await DashboardModel.getDriverSummaryToday(userId);
+  }
 }
 
 export default DashboardService;

@@ -137,6 +137,18 @@ class DashboardController {
       return errorResponse(res, "Gagal mengambil today's activity", error.message, 500);
     }
   }
+
+  // Ringkasan Hari Ini buat 1 Driver (scoped ke req.user.id - JANGAN pasang
+  // cacheMiddleware di endpoint ini, datanya per-user, lihat cacheMiddleware.js).
+  static async getDriverSummary(req, res) {
+    try {
+      const summary = await DashboardService.getDriverSummary(req.user.id);
+      return successResponse(res, 'Driver summary fetched successfully', summary);
+    } catch (error) {
+      console.error('Error in getDriverSummary:', error.message);
+      return errorResponse(res, 'Gagal mengambil ringkasan Driver', error.message, 500);
+    }
+  }
 }
 
 export default DashboardController;

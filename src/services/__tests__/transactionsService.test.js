@@ -192,7 +192,7 @@ describe('transactionsService.addTransaction', () => {
     await TransactionService.addTransaction(req);
 
     expect(TransactionsModel.insertTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({ created_by_role: 'Driver' }),
+      expect.objectContaining({ created_by_role: 'Driver', created_by_user_id: 7 }),
       { fakeConn: true }
     );
   });
@@ -213,7 +213,7 @@ describe('transactionsService.addTransaction', () => {
     await TransactionService.addTransaction(req);
 
     expect(TransactionsModel.insertTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({ created_by_role: null }),
+      expect.objectContaining({ created_by_role: null, created_by_user_id: null }),
       { fakeConn: true }
     );
   });

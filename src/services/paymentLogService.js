@@ -146,6 +146,10 @@ const PaymentLogService = {
     return await PaymentLogsModel.getDebtsSummary(filters);
   },
 
+  getPriorityDebts: async (limit) => {
+    return await PaymentLogsModel.getPriorityDebts(limit);
+  },
+
   deletePaymentLogByTransactionId: async (transaction_id, req) => {
     const result = await PaymentLogsModel.deletePaymentLogByTransactionId(
       transaction_id
@@ -191,7 +195,8 @@ const PaymentLogService = {
       payment_date,
       amount_paid,
       conn,
-      req?.user?.role || null
+      req?.user?.role || null,
+      req?.user?.id || null
     );
 
     // ✅ Logging setelah berhasil insert

@@ -94,6 +94,10 @@ const TransactionService = {
           total_price,
           payment_amount: amount_paid,
           created_by_role: transactionData.user?.role || null,
+          // created_by_user_id: buat fitur Dashboard Driver ("Ringkasan Hari Ini"
+          // per-individu, Anto vs Aan beda) - beda dari created_by_role yang cuma
+          // nyimpen role-nya. Nullable, gak dipakai di query manapun selain itu.
+          created_by_user_id: transactionData.user?.id || null,
         },
         conn
       );
