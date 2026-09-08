@@ -84,6 +84,7 @@ const PaymentLogs = {
         t.id AS transaction_id,
         t.customer_id,
         t.total_price,
+        t.created_by_role,
         COALESCE(SUM(pl.amount_paid), 0) AS total_paid,
         (t.total_price - COALESCE(SUM(pl.amount_paid), 0)) AS remaining_debt,
         CASE
@@ -94,7 +95,7 @@ const PaymentLogs = {
       JOIN customers c ON t.customer_id = c.id
       LEFT JOIN payment_logs pl ON t.id = pl.transaction_id AND pl.deleted_at IS NULL
       WHERE ${whereClauses.join(' AND ')}
-      GROUP BY t.id, t.customer_id, t.total_price${havingClause}
+      GROUP BY t.id, t.customer_id, t.total_price, t.created_by_role${havingClause}
     `;
 
     let orderByClause = ' ORDER BY t.transaction_date';
@@ -176,11 +177,12 @@ const PaymentLogs = {
     owe_date,
     payment_date,
     amount_paid,
-    conn
+    conn,
+    created_by_role = null
   ) => {
     const queryInsert = `
-      INSERT INTO payment_logs (transaction_id, customer_id, owe_date, payment_date, amount_paid)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO payment_logs (transaction_id, customer_id, owe_date, payment_date, amount_paid, created_by_role)
+      VALUES (?, ?, ?, ?, ?, ?)
     `;
 
     const executor = conn || dbConnection.promise();
@@ -190,6 +192,7 @@ const PaymentLogs = {
       owe_date || new Date().toISOString().slice(0, 10),
       payment_date || null,
       amount_paid || 0,
+      created_by_role,
     ]);
 
     return results;

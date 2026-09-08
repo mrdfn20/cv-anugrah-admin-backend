@@ -26,12 +26,14 @@ router.get(
 
 /**
  * @route POST /paymentlogs/paydebt
- * @desc Membayar hutang berdasarkan transaction_id
+ * @desc Membayar hutang berdasarkan transaction_id - Driver ikut diizinkan,
+ * dibedain lewat kolom created_by_role di payment_logs (lihat catatan di
+ * routes/transactions.js soal pola review Driver -> Editor/Admin).
  */
 router.post(
   '/paydebt',
   authMiddleware,
-  roleMiddleware(['Admin', 'Editor']),
+  roleMiddleware(['Admin', 'Editor', 'Driver']),
   payDebtController
 );
 

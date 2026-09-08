@@ -175,6 +175,49 @@ describe('transactionsService.addTransaction', () => {
     expect(withTransaction).toHaveBeenCalledTimes(1);
   });
 
+  it('created_by_role diambil dari req.user.role (Driver) dan diteruskan ke insertTransaction', async () => {
+    const req = {
+      body: {
+        customer_id: 1,
+        gallon_filled: 5,
+        gallon_empty: 5,
+        gallon_returned: 0,
+        transaction_type: 'Tunai',
+        armada_id: 1,
+        payment_amount: 0,
+      },
+      user: { id: 7, role: 'Driver' },
+    };
+
+    await TransactionService.addTransaction(req);
+
+    expect(TransactionsModel.insertTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ created_by_role: 'Driver' }),
+      { fakeConn: true }
+    );
+  });
+
+  it('created_by_role null kalau req.user gak ada (jaga-jaga, harusnya selalu ada berkat authMiddleware)', async () => {
+    const req = {
+      body: {
+        customer_id: 1,
+        gallon_filled: 5,
+        gallon_empty: 5,
+        gallon_returned: 0,
+        transaction_type: 'Tunai',
+        armada_id: 1,
+        payment_amount: 0,
+      },
+    };
+
+    await TransactionService.addTransaction(req);
+
+    expect(TransactionsModel.insertTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ created_by_role: null }),
+      { fakeConn: true }
+    );
+  });
+
   it('Customer/harga galon gak ketemu -> throw sebelum masuk withTransaction sama sekali', async () => {
     GallonService.getGallonPriceByCustomerId.mockResolvedValue(null);
 

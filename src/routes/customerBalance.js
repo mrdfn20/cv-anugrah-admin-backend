@@ -13,23 +13,27 @@ import roleMiddleware from '../middlewares/roleMiddleware.js';
 
 /**
  * @route POST /customerbalance
- * @desc Menambahkan saldo pelanggan baru
+ * @desc Menambahkan saldo pelanggan baru - Driver ikut diizinkan (bukan
+ * /set yang buat koreksi/override, itu tetap Admin only). Aksi ini otomatis
+ * tercatat di audit_logs (role=Driver) buat direview Editor/Admin.
  */
 router.post(
   '/',
   authMiddleware,
-  roleMiddleware(['Admin', 'Editor']),
+  roleMiddleware(['Admin', 'Editor', 'Driver']),
   addCustomerBalanceController
 );
 
 /**
  * @route PUT /customerbalance
- * @desc Memperbarui saldo pelanggan
+ * @desc Memperbarui (menambahkan) saldo pelanggan - INI yang beneran dipanggil
+ * tombol "+ Tambah Saldo" di halaman detail pelanggan (bukan POST di atas, yang
+ * cuma dipakai internal buat bikin row saldo pertama kali). Driver ikut diizinkan.
  */
 router.put(
   '/',
   authMiddleware,
-  roleMiddleware(['Admin', 'Editor']),
+  roleMiddleware(['Admin', 'Editor', 'Driver']),
   updateCustomerBalanceController
 );
 

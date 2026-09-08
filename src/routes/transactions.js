@@ -16,12 +16,15 @@ import roleMiddleware from '../middlewares/roleMiddleware.js';
 
 /**
  * @route POST /transactions
- * @desc Menambahkan transaksi baru
+ * @desc Menambahkan transaksi baru - Driver ikut diizinkan (kurir input transaksi
+ * langsung di lapangan), tapi TETAP ke tabel transactions asli (bukan tabel
+ * staging terpisah) - dibedain lewat kolom created_by_role buat direview Editor/
+ * Admin belakangan (lihat models/transactionsModel.js + halaman Audit Log).
  */
 router.post(
   '/',
   authMiddleware,
-  roleMiddleware(['Admin', 'Editor']),
+  roleMiddleware(['Admin', 'Editor', 'Driver']),
   addTransactionController
 );
 

@@ -139,6 +139,29 @@ describe('paymentLogService.payDebt', () => {
     );
   });
 
+  it('created_by_role diambil dari req.user.role (Driver) dan diteruskan ke insertPaymentLogs', async () => {
+    const driverReq = { user: { id: 9, role: 'Driver' } };
+    PaymentLogsModel.getDebtTransactionById.mockResolvedValue({
+      transaction_id: 1,
+      customer_id: 1,
+      transaction_date: '2026-01-01',
+      total_price: 40000,
+      total_paid: 0,
+    });
+
+    await PaymentLogService.payDebt(driverReq, { transaction_id: 1, amount_paid: 10000 });
+
+    expect(PaymentLogsModel.insertPaymentLogs).toHaveBeenCalledWith(
+      1,
+      1,
+      '2026-01-01',
+      expect.any(String),
+      10000,
+      { fakeConn: true },
+      'Driver'
+    );
+  });
+
   it('saldo pelanggan yang ada otomatis kepake sbg bagian pembayaran', async () => {
     CustomerBalanceService.getCustomerBalanceById.mockResolvedValue({ balance: 12000 });
     PaymentLogsModel.getDebtTransactionById.mockResolvedValue({

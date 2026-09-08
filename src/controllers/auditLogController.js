@@ -15,7 +15,7 @@ class AuditLogController {
    * @param {Object} res - Express response object
    */
   static async getLogs(req, res) {
-    const { search, page, limit } = req.query;
+    const { search, role, page, limit } = req.query;
 
     try {
       if (page && (isNaN(parseInt(page)) || parseInt(page) < 1)) {
@@ -25,7 +25,7 @@ class AuditLogController {
         return validationErrorResponse(res, ['limit harus angka >= 1']);
       }
 
-      const results = await AuditLogsService.getLogs({ search, page, limit });
+      const results = await AuditLogsService.getLogs({ search, role, page, limit });
 
       const isPaginated = limit && results && !Array.isArray(results);
       const logs = isPaginated ? results.data : results;

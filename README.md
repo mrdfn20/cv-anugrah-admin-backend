@@ -4,17 +4,17 @@ Backend API service for CV Anugrah Gemilang's internal water-gallon delivery man
 
 ## Features
 
-- 🔐 **JWT Authentication & Role-based Access Control** (Admin / Editor / Driver)
+- 🔐 **JWT Authentication & Role-based Access Control** (Admin / Editor / Driver) — Driver can now create transactions, pay debts, and add customer balance directly (previously read-only); every write those 3 endpoints do carries who did it, so it stays reviewable rather than needing a pre-commit approval gate
 - 👥 **Customer Management** (CRUD, photo via Google Drive link, sub-region/region hierarchy, soft-delete + restore, monthly activity summary, balance/outstanding-debt included in the list response for filtering)
-- 💰 **Transaction & Debt Processing** — Tunai/Hutang, customer balance auto-applied, overpayment auto-credited to balance, soft-delete + restore
-- 💳 **Customer Balance Management** — incremental top-up (`PUT /customerbalance`) and an Admin-only hard "set to exact value" correction (`PUT /customerbalance/set`) for fixing mis-entered amounts or zeroing out a balance
+- 💰 **Transaction & Debt Processing** — Tunai/Hutang, customer balance auto-applied, overpayment auto-credited to balance, soft-delete + restore. `transactions`/`payment_logs` carry a `created_by_role` column (nullable, purely informational — never filtered on) so the frontend can badge Driver-submitted records
+- 💳 **Customer Balance Management** — incremental top-up (`PUT /customerbalance`, open to Admin/Editor/Driver) and an Admin-only hard "set to exact value" correction (`PUT /customerbalance/set`) for fixing mis-entered amounts or zeroing out a balance
 - 🚰 **Gallon Stock & Movement Tracking** (per-customer and global ledger with running balance)
 - 🧾 **Cross-customer Debt List** (`/paymentlogs/getdebts`)
 - 🚚 **Fleet Management** (Armada CRUD, guarded against deleting a fleet still referenced by transactions)
 - 🗺️ **Region / Sub-region Management** (kecamatan / kompleks-desa CRUD, Admin-only writes, guarded against deleting a region with sub-regions or a sub-region with customers still attached)
-- 📊 **Dashboard Analytics** & **Custom-range Reports** (overall summary and a per-region omzet/debt breakdown)
+- 📊 **Dashboard Analytics** & **Custom-range Reports** (overall summary and a per-region omzet/debt breakdown); dashboard summary endpoints (`/dashboard/*`) are cached in-memory for 30s (`src/middlewares/cacheMiddleware.js`) since the aggregate queries are hit repeatedly and are identical for every Admin/Editor viewer
 - 🔍 **Global Search**
-- 📝 **Audit Logging** (every create/update/delete recorded with before/after state)
+- 📝 **Audit Logging** (every create/update/delete recorded with before/after state; `GET /auditlogs` open to Admin + Editor, with an optional `?role=` exact-match filter — mainly used to review what Driver submitted)
 
 ## Technology Stack
 
@@ -191,7 +191,7 @@ JWT in the `Authorization` header:
 Authorization: Bearer <access_token>
 ```
 
-Three roles: `Admin` (full access), `Editor` (most write access, time-limited deletes), `Driver` (read-only on a subset of endpoints).
+Three roles: `Admin` (full access), `Editor` (most write access, time-limited deletes), `Driver` (mostly read-only, but CAN create transactions, pay debts, and add customer balance — `POST /transactions`, `POST /paymentlogs/paydebt`, `PUT /customerbalance` — those writes go straight into the real tables, no separate approval/staging step; they're just tagged `created_by_role` and easy to filter in `GET /auditlogs?role=Driver` for after-the-fact review by Editor/Admin).
 
 ## Deployment
 

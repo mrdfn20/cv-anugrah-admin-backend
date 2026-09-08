@@ -185,7 +185,8 @@ const PaymentLogService = {
       owe_date,
       payment_date,
       amount_paid,
-      conn
+      conn,
+      req?.user?.role || null
     );
 
     // ✅ Logging setelah berhasil insert

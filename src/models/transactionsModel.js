@@ -23,14 +23,15 @@ const Transactions = {
       gallon_price_id,
       total_price,
       payment_amount,
+      created_by_role = null,
     } = data;
 
     const query = `
       INSERT INTO transactions (
         transaction_date, customer_id, gallon_filled, gallon_empty, gallon_returned,
-        transaction_type, armada_id, gallon_price_id, total_price, payment_amount
+        transaction_type, armada_id, gallon_price_id, total_price, payment_amount, created_by_role
       )
-      VALUES (NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const executor = conn || dbConnection.promise();
@@ -44,6 +45,7 @@ const Transactions = {
       gallon_price_id,
       total_price,
       payment_amount,
+      created_by_role,
     ]);
 
     return results.insertId;

@@ -78,7 +78,10 @@ const TransactionService = {
         );
       }
 
-      // 5️⃣ Simpan transaksi ke DB
+      // 5️⃣ Simpan transaksi ke DB - created_by_role dicatat biar Editor/Admin
+      // bisa nyaring "yang diinput Driver" di halaman Transaksi/Audit Log buat
+      // direview belakangan (Driver sekarang boleh input langsung, TAPI tetap
+      // kelihatan siapa yang input - lihat routes/transactions.js).
       const newTransactionId = await TransactionsModel.insertTransaction(
         {
           customer_id,
@@ -90,6 +93,7 @@ const TransactionService = {
           gallon_price_id,
           total_price,
           payment_amount: amount_paid,
+          created_by_role: transactionData.user?.role || null,
         },
         conn
       );
@@ -130,6 +134,7 @@ const TransactionService = {
       action: 'CREATE',
       endpoint: '/transactions',
       requestData: {
+        transaction_id: transactionId,
         customer_id,
         gallon_filled,
         gallon_empty,

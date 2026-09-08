@@ -28,11 +28,12 @@ class AuditLogsModel {
   }
 
   /**
-   * Mengambil audit log, opsional dgn pencarian (username/role/aksi/endpoint) & pagination.
-   * `page`/`limit` OPSIONAL - kalau gak dikirim, balikin SEMUA log (perilaku lama).
-   * @param {{ search?: string, page?: number, limit?: number }} params
+   * Mengambil audit log, opsional dgn pencarian (username/role/aksi/endpoint), filter role
+   * persis, & pagination. `page`/`limit` OPSIONAL - kalau gak dikirim, balikin SEMUA log
+   * (perilaku lama).
+   * @param {{ search?: string, role?: string, page?: number, limit?: number }} params
    */
-  static async getLogs({ search, page, limit } = {}) {
+  static async getLogs({ search, role, page, limit } = {}) {
     const whereClauses = [];
     const queryParams = [];
 
@@ -42,6 +43,14 @@ class AuditLogsModel {
       );
       const like = `%${search}%`;
       queryParams.push(like, like, like, like);
+    }
+
+    // 🆕 Filter role PERSIS (beda dari `search` yang cuma substring-match) - dipakai
+    // buat "Aktivitas Driver": nyaring transaksi/bayar-hutang/tambah-saldo yang diinput
+    // Driver, biar Editor/Admin gampang review satu-satu.
+    if (role) {
+      whereClauses.push('audit_logs.role = ?');
+      queryParams.push(role);
     }
 
     const fromAndWhere = `

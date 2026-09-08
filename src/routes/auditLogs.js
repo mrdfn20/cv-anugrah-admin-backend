@@ -5,10 +5,12 @@ import roleMiddleware from '../middlewares/roleMiddleware.js';
 
 const router = express.Router();
 
+// 🆕 Editor ikut diizinkan (bukan cuma Admin) - Editor yang sehari-hari review aktivitas
+// Driver (transaksi/bayar-hutang/tambah-saldo yang diinput kurir di lapangan).
 router.get(
   '/',
   authMiddleware,
-  roleMiddleware(['Admin']),
+  roleMiddleware(['Admin', 'Editor']),
   AuditLogController.getLogs
 );
 
