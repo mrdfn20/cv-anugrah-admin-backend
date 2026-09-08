@@ -26,8 +26,16 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          # set -e + npm ci (bukan npm install) - lihat catatan di deploy-staging.yml.
+          # npm install kadang "usil" dikit ngubah package-lock.json pas diinstall,
+          # bikin git pull DEPLOY BERIKUTNYA ketolak ("local changes would be
+          # overwritten") - gagalnya diam-diam karena gak ada set -e, jadi Actions
+          # tetap kelihatan sukses padahal kode barunya gak pernah beneran nyampe.
+          # npm ci gak pernah nulis ulang lockfile, jadi masalah ini gak kejadian lagi.
           script: |
+            set -e
             cd ~/apps/backend
+            git checkout -- .
             git pull origin main
-            npm install --omit=dev
+            npm ci --omit=dev
             pm2 restart cv-anugrah-backend
