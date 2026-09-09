@@ -25,6 +25,12 @@ const Transactions = {
       payment_amount,
       created_by_role = null,
       created_by_user_id = null,
+      // 🆕 transaction_date: opsional, buat Editor/Driver input tanggal manual (misal
+      // ngelewat/lupa dicatat hari itu juga, mau backdate). null (default) -> NOW(),
+      // sama persis kayak perilaku lama. COALESCE dipilih (bukan hitung tanggal di JS)
+      // biar MySQL sendiri yang nanganin konversi 'YYYY-MM-DD' -> DATETIME & timezone-nya,
+      // konsisten sama gimana NOW() udah kerja - gak ada resiko selisih timezone Node vs DB.
+      transaction_date = null,
     } = data;
 
     const query = `
@@ -32,11 +38,12 @@ const Transactions = {
         transaction_date, customer_id, gallon_filled, gallon_empty, gallon_returned,
         transaction_type, armada_id, gallon_price_id, total_price, payment_amount, created_by_role, created_by_user_id
       )
-      VALUES (NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (COALESCE(?, NOW()), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const executor = conn || dbConnection.promise();
     const [results] = await executor.execute(query, [
+      transaction_date,
       customer_id,
       gallon_filled,
       gallon_empty,

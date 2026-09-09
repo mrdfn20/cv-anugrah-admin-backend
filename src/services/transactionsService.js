@@ -17,6 +17,7 @@ const TransactionService = {
       transaction_type,
       armada_id,
       payment_amount,
+      transaction_date, // opsional - lihat catatan di transactionsModel.js insertTransaction
     } = transactionData.body;
 
     // 1️⃣ Ambil harga galon otomatis dari pelanggan
@@ -98,6 +99,7 @@ const TransactionService = {
           // per-individu, Anto vs Aan beda) - beda dari created_by_role yang cuma
           // nyimpen role-nya. Nullable, gak dipakai di query manapun selain itu.
           created_by_user_id: transactionData.user?.id || null,
+          transaction_date: transaction_date || null,
         },
         conn
       );
@@ -148,6 +150,7 @@ const TransactionService = {
         gallon_price_id,
         total_price,
         payment_amount: amount_paid,
+        transaction_date: transaction_date || null,
       },
     });
 

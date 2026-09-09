@@ -106,7 +106,7 @@ All routes are prefixed with `/api`. Endpoints marked 🔒 require a valid JWT (
 - `GET /transactions/filter` 🔒 — filter by customer/sub-region/date range/sort, same live `total_paid`/`remaining_debt` fields. Optional `page`/`limit` for server-side pagination (returns `{ data, meta.pagination }`); omit both to get the full unpaginated result (used by Reports).
 - `GET /transactions/deleted` 🔒 — soft-deleted transactions (for restore UI)
 - `GET /transactions/:id` 🔒 · `GET /transactions/customer/:id` 🔒
-- `POST /transactions` 🔒 — create (Tunai auto-settles; Hutang applies customer balance first, then any overpayment is credited back to balance). Runs inside a DB transaction — if any step fails, everything rolls back.
+- `POST /transactions` 🔒 — create (Tunai auto-settles; Hutang applies customer balance first, then any overpayment is credited back to balance). Runs inside a DB transaction — if any step fails, everything rolls back. Optional `transaction_date` (`YYYY-MM-DD`, must not be in the future) lets Editor/Driver backdate a transaction entered late; omit it and the row gets the precise current timestamp (`NOW()`) same as before — a provided date is stored at midnight that day (`COALESCE(?, NOW())` in `transactionsModel.js`), which is fine since nothing queries transactions by time-of-day, only by date.
 - `DELETE /transactions/:id` 🔒 — soft delete (Editor limited to within 60 minutes of creation)
 - `PUT /transactions/restore/:id` 🔒 — restore a soft-deleted transaction
 

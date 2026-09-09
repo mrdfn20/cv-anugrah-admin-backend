@@ -218,6 +218,45 @@ describe('transactionsService.addTransaction', () => {
     );
   });
 
+  it('transaction_date diteruskan apa adanya kalau diisi (backdate manual)', async () => {
+    const req = makeReq({
+      customer_id: 1,
+      gallon_filled: 5,
+      gallon_empty: 5,
+      gallon_returned: 0,
+      transaction_type: 'Tunai',
+      armada_id: 1,
+      payment_amount: 40000,
+      transaction_date: '2026-09-05',
+    });
+
+    await TransactionService.addTransaction(req);
+
+    expect(TransactionsModel.insertTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ transaction_date: '2026-09-05' }),
+      { fakeConn: true }
+    );
+  });
+
+  it('transaction_date null kalau gak diisi - biar model fallback ke NOW()', async () => {
+    const req = makeReq({
+      customer_id: 1,
+      gallon_filled: 5,
+      gallon_empty: 5,
+      gallon_returned: 0,
+      transaction_type: 'Tunai',
+      armada_id: 1,
+      payment_amount: 40000,
+    });
+
+    await TransactionService.addTransaction(req);
+
+    expect(TransactionsModel.insertTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ transaction_date: null }),
+      { fakeConn: true }
+    );
+  });
+
   it('Customer/harga galon gak ketemu -> throw sebelum masuk withTransaction sama sekali', async () => {
     GallonService.getGallonPriceByCustomerId.mockResolvedValue(null);
 
