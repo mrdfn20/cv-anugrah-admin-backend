@@ -59,7 +59,7 @@ describe('authMiddleware', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('token expired -> 403, next() gak dipanggil', () => {
+  it('token expired -> 401 (bukan 403), biar frontend bisa auto-refresh; next() gak dipanggil', () => {
     const expiredToken = jwt.sign({ id: 1, role: 'Admin' }, TEST_SECRET, {
       expiresIn: -10, // udah expired 10 detik yang lalu
     });
@@ -68,7 +68,9 @@ describe('authMiddleware', () => {
 
     authMiddleware(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(403);
+    // 401 (bukan 403) - expired itu kondisi normal tiap 1 jam, frontend nanganin
+    // 401 dgn nembak refresh-token otomatis. 403 disisain buat token yang rusak.
+    expect(res.status).toHaveBeenCalledWith(401);
     expect(next).not.toHaveBeenCalled();
   });
 
