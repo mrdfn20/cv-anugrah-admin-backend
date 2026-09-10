@@ -280,8 +280,8 @@ const TransactionService = {
     return results;
   },
 
-  getDeletedTransactions: async () => {
-    return await TransactionsModel.getDeletedTransactions();
+  getDeletedTransactions: async (limit) => {
+    return await TransactionsModel.getDeletedTransactions(limit);
   },
 
   getTransactionByCustomerId: async (customer_id) => {

@@ -117,15 +117,23 @@ const Transactions = {
   },
 
   /**
-   * Mengambil transaksi yang sudah di-soft-delete (buat fitur restore)
+   * Mengambil transaksi yang sudah di-soft-delete (buat fitur restore).
+   * DIBATASI 100 terbaru (bukan ambil semua) - fitur restore ini praktis cuma dipakai
+   * buat undo transaksi yang BARU kehapus, gak perlu semua histori. Sebelumnya gak ada
+   * LIMIT, dan di production yang transaksi terhapusnya banyak, response + render-nya
+   * berat (dicurigai biang browser freeze pas hapus transaksi). LIMIT diselipkan langsung
+   * (bukan placeholder) - sama alasannya kayak query paginasi lain, aman krn integer fix.
+   * @param {number} [limit=100]
    */
-  getDeletedTransactions: async () => {
+  getDeletedTransactions: async (limit = 100) => {
+    const safeLimit = Math.max(parseInt(limit) || 100, 1);
     const query = `
       SELECT t.*, c.customer_name
       FROM transactions t
       JOIN customers c ON t.customer_id = c.id
       WHERE t.deleted_at IS NOT NULL
       ORDER BY t.deleted_at DESC
+      LIMIT ${safeLimit}
     `;
     const [results] = await dbConnection.promise().execute(query);
     return results;

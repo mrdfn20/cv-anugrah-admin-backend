@@ -275,7 +275,12 @@ export const getAllTransactions = async (req, res) => {
  */
 export const getDeletedTransactions = async (req, res) => {
   try {
-    const results = await TransactionsService.getDeletedTransactions();
+    const { limit } = req.query;
+    if (limit && (isNaN(parseInt(limit)) || parseInt(limit) < 1)) {
+      return validationErrorResponse(res, ['limit harus angka >= 1']);
+    }
+
+    const results = await TransactionsService.getDeletedTransactions(limit);
 
     if (!results || results.length === 0) {
       return successResponse(res, 'No deleted transactions found', [], null, 200);
