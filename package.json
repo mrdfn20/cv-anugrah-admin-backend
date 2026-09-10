@@ -35,5 +35,9 @@
     "globals": "^16.0.0",
     "nodemon": "^3.1.9",
     "vitest": "^4.1.11"
+  },
+  "_overrides_note": "qs dipaksa ke 6.16.0: express@4 & body-parser narik qs<=6.15.3 yang kena 2 celah moderate (array-limit bypass + isBuffer DoS). qs 6.x API-compatible, jauh lebih ringan daripada migrasi Express 5.",
+  "overrides": {
+    "qs": "^6.16.0"
   }
 }
