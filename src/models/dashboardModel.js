@@ -115,9 +115,14 @@ class DashboardModel {
 
     rows.forEach((row) => {
       const remainingDebt = row.total_price - row.total_paid;
-      if (remainingDebt === 0) {
+      // 🐛 Bug ditemuin user via stress test (2026-09-11), pola sama kayak
+      // status_hutang di paymentLogsModel.js: dulu `=== 0` doang - transaksi yang
+      // overpay (remainingDebt NEGATIF) gak match `=== 0` maupun `> 0`, jadi
+      // DIAM-DIAM KE-DROP dari dua-duanya (lunas & belumLunas kehitung lebih
+      // kecil dari yang sebenarnya). <= 0 nangkep "gak ada sisa hutang" secara utuh.
+      if (remainingDebt <= 0) {
         lunas++;
-      } else if (remainingDebt > 0) {
+      } else {
         belumLunas++;
       }
     });

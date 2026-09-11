@@ -115,7 +115,12 @@ const Gallon = {
     query += ` GROUP BY c.id, c.customer_name, sr.sub_region_name`;
 
     if (stockLimit !== undefined && stockLimit !== null) {
-      query += ` HAVING unreturned_gallons <= ?`;
+      // 🐛 Bug ditemuin user via stress test (2026-09-11): dulu `<= ?` - kebalik dari
+      // maksud field-nya ("Min. Galon Belum Retur" = MINIMUM, harusnya nyaring yang
+      // sisa galonnya >= angka itu, buat nyari pelanggan yg perlu ditagih retur).
+      // Kebalikannya, kode lama malah nampilin yang sisanya SEDIKIT/negatif (termasuk
+      // yang udah over-retur, mis. -3), bukan yang numpuk banyak.
+      query += ` HAVING unreturned_gallons >= ?`;
       queryParams.push(stockLimit);
     }
 

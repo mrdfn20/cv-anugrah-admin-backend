@@ -66,9 +66,16 @@ const PaymentLogs = {
       queryParams.push(endDate);
     }
 
+    // 🐛 Bug ditemuin user via stress test (2026-09-11): 'Lunas' dulu cuma cek
+    // `= 0`, bukan `<= 0` - transaksi yang OVERPAY (remaining_debt NEGATIF, misal
+    // dari data lama sebelum fix upgrade Hutang->Tunai) gak ke-anggep 'Lunas' SAMA
+    // SEKALI (gak match `= 0` maupun `> 0` di 'Belum Lunas'), jadi ilang dari
+    // filter status manapun DAN badge-nya nampilin teks "Belum Lunas" (lihat
+    // status_hutang di bawah) walau warnanya kehijau-hijauan (getStatusClass FE
+    // udah bener pakai <= 0) - teks & warna jadi kontradiksi.
     const havingClause =
       status === 'Lunas'
-        ? ' HAVING remaining_debt = 0'
+        ? ' HAVING remaining_debt <= 0'
         : status === 'Belum Lunas'
           ? ' HAVING remaining_debt > 0'
           : '';
@@ -85,7 +92,7 @@ const PaymentLogs = {
         COALESCE(SUM(pl.amount_paid), 0) AS total_paid,
         (t.total_price - COALESCE(SUM(pl.amount_paid), 0)) AS remaining_debt,
         CASE
-          WHEN (t.total_price - COALESCE(SUM(pl.amount_paid), 0)) = 0 THEN 'Lunas'
+          WHEN (t.total_price - COALESCE(SUM(pl.amount_paid), 0)) <= 0 THEN 'Lunas'
           ELSE 'Belum Lunas'
         END AS status_hutang
       FROM transactions t
