@@ -3,9 +3,14 @@ import moment from 'moment-timezone';
 
 class SearchModel {
   static async searchCustomers(keyword) {
+    // 🐛 Bug ditemuin lewat audit (2026-09-11): dulu gak ada `deleted_at IS NULL` di
+    // sini (beda dari searchTransactions/searchDebts yang udah bener) - pelanggan yang
+    // udah dihapus (soft-delete) tetep nongol di hasil Global Search (Ctrl+K), padahal
+    // diklik bakal "not found" (getCustomerById nge-filter deleted_at IS NULL).
     const query = `
-      SELECT * FROM customers 
-      WHERE customer_name LIKE ? OR whatsapp_number LIKE ?
+      SELECT * FROM customers
+      WHERE (customer_name LIKE ? OR whatsapp_number LIKE ?)
+      AND deleted_at IS NULL
     `;
     const [results] = await dbConnection
       .promise()
