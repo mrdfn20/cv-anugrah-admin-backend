@@ -131,6 +131,64 @@ describe('transactionsService.addTransaction', () => {
     );
   });
 
+  it('BUG: Hutang overpay TANPA saldo -> transaction_type harus ke-upgrade jadi Tunai (bukan cuma exact match)', async () => {
+    // Dulu cek-nya `amount_paid === total_price` (persis sama doang) - overpay
+    // (amount_paid > total_price) gak pernah ke-upgrade, tetep nyangkut "Hutang"
+    // padahal lunas + ada kelebihan. Akibatnya: transaksi ini nongol terus di
+    // halaman/daftar Hutang dengan sisa hutang NEGATIF (membingungkan), padahal
+    // seharusnya "Tunai" (dokumentasi/README bilang syaratnya amount_paid >= total_price).
+    const req = makeReq({
+      customer_id: 1,
+      gallon_filled: 5, // total_price 40000
+      gallon_empty: 5,
+      gallon_returned: 0,
+      transaction_type: 'Hutang',
+      armada_id: 1,
+      payment_amount: 45000, // lebih 5000
+    });
+
+    const result = await TransactionService.addTransaction(req);
+
+    expect(result.transaction_type).toBe('Tunai');
+    // Kelebihannya (5000) tetap harus masuk saldo walau transaksinya "Tunai"
+    // (dulu logic ini nyantol di dalam blok `if (finalTransactionType === 'Hutang')`,
+    // jadi begitu upgrade ke Tunai, kelebihannya malah HILANG gak ke-kredit sama sekali).
+    expect(CustomerBalanceService.updateCustomerBalance).toHaveBeenCalledWith(
+      req,
+      { customer_id: 1, balance: 5000 },
+      { fakeConn: true }
+    );
+  });
+
+  it('BUG: Hutang overpay DENGAN saldo lama -> tetep Tunai + kelebihan gabungan tetep masuk saldo', async () => {
+    CustomerBalanceService.getCustomerBalanceById.mockResolvedValue({ balance: 15000 });
+
+    const req = makeReq({
+      customer_id: 1,
+      gallon_filled: 5, // total_price 40000
+      gallon_empty: 5,
+      gallon_returned: 0,
+      transaction_type: 'Hutang',
+      armada_id: 1,
+      payment_amount: 30000, // balanceUsed(15000) + 30000 = 45000, lebih 5000
+    });
+
+    const result = await TransactionService.addTransaction(req);
+
+    expect(result.amount_paid).toBe(45000);
+    expect(result.transaction_type).toBe('Tunai');
+    expect(CustomerBalanceService.reduceCustomerBalance).toHaveBeenCalledWith(
+      req,
+      { customer_id: 1, balanceUsed: 15000 },
+      { fakeConn: true }
+    );
+    expect(CustomerBalanceService.updateCustomerBalance).toHaveBeenCalledWith(
+      req,
+      { customer_id: 1, balance: 5000 },
+      { fakeConn: true }
+    );
+  });
+
   it('Saldo pelanggan yang sudah ada otomatis kepake duluan sebelum payment_amount', async () => {
     CustomerBalanceService.getCustomerBalanceById.mockResolvedValue({ balance: 15000 });
 

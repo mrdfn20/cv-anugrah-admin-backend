@@ -5,7 +5,15 @@ import withTransaction from '../helpers/dbTransactionHelper.js';
 import logHelper from '../helpers/logHelper.js';
 
 const PaymentLogService = {
-  payDebt: async (req, { transaction_id, payment_date, amount_paid }) => {
+  payDebt: async (req, { transaction_id, payment_date, amount_paid: rawAmountPaid }) => {
+    // 🛡️ Sama kayak transactionsService.addTransaction - controller cuma VALIDASI
+    // amount_paid (>0), gak mengubah nilainya. Dipaksa Number di sini biar `+`/`+=` di
+    // bawah gak ke-jebak jadi penggabungan teks kalau ada caller yang kirim string.
+    const amount_paid = Number(rawAmountPaid) || 0;
+    if (amount_paid <= 0) {
+      throw new Error('amount_paid harus lebih dari 0.');
+    }
+
     const debt = await PaymentLogsModel.getDebtTransactionById(transaction_id);
     if (!debt) {
       throw new Error('No debt found for this transaction.');
@@ -26,7 +34,20 @@ const PaymentLogService = {
     const totalPayment = amount_paid + customerBalance;
     const paymentForDebt = Math.min(totalPayment, remainingDebt);
     const balanceUsed = Math.min(customerBalance, remainingDebt);
-    const extraBalance = Math.max(totalPayment - remainingDebt, 0);
+    // 🐛 BUG KRITIS ditemuin user (2026-09-11): dulu `extraBalance = totalPayment -
+    // remainingDebt` - itu MASUKIN SELURUH customerBalance (bukan cuma balanceUsed
+    // yang beneran kepake). Begitu saldo pelanggan LEBIH dari sisa hutang (balance >
+    // remainingDebt) DAN admin juga input bayar tunai, sisa saldo lama yang gak kepake
+    // (customerBalance - balanceUsed) itu udah otomatis "ketinggal" di baris saldo abis
+    // reduceCustomerBalance(balanceUsed) di bawah - tapi extraBalance versi lama NAMBAHIN
+    // LAGI porsi itu (via updateCustomerBalance, yang MENAMBAHKAN bukan menimpa), jadi
+    // saldo pelanggan digandakan / nongol dari udara. Contoh nyata: saldo 100rb, sisa
+    // hutang 40rb, bayar tunai jg 5rb -> versi lama nge-kredit saldo akhir 125rb
+    // (harusnya cuma 65rb = 100rb+5rb-40rb). Fix: extraBalance cuma porsi TUNAI yang gak
+    // kepake buat nutup hutang (sama pola yang dipakai transactionsService.js buat kasus
+    // serupa) - bukan totalPayment (saldo lama + tunai) dikurangi sisa hutang.
+    const cashNeededForDebt = Math.max(paymentForDebt - balanceUsed, 0);
+    const extraBalance = Math.max(amount_paid - cashNeededForDebt, 0);
 
     // 🔒 Kurangi saldo + simpan log pembayaran + tambah saldo kelebihan dijalankan dalam
     // 1 DB transaction - kalau ada step yang gagal di tengah, semua ikut di-rollback

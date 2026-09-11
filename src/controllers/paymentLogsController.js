@@ -35,7 +35,10 @@ export const payDebt = async (req, res) => {
       return notFoundErrorResponse(res, 'Debt');
     }
 
-    if (error.message === 'Debt is already fully paid.') {
+    if (
+      error.message === 'Debt is already fully paid.' ||
+      error.message === 'amount_paid harus lebih dari 0.'
+    ) {
       return validationErrorResponse(res, [error.message]);
     }
 

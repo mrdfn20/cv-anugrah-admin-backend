@@ -37,6 +37,39 @@ describe('paymentLogService.payDebt', () => {
     CustomerBalanceService.getCustomerBalanceById.mockResolvedValue({ balance: 0 });
   });
 
+  it('amount_paid string angka ("5000") tetap dihitung bener (bukan digabung teks)', async () => {
+    PaymentLogsModel.getDebtTransactionById.mockResolvedValue({
+      transaction_id: 1,
+      customer_id: 1,
+      transaction_date: '2026-01-01',
+      total_price: 40000,
+      total_paid: 0,
+    });
+
+    const result = await PaymentLogService.payDebt(req, {
+      transaction_id: 1,
+      amount_paid: '5000', // string, bukan number - simulasi caller non-UI resmi
+    });
+
+    // Kalau ke-anggep string ("5000" + 0 saldo), hasilnya bakal beda/error. Harus
+    // ke-hitung sbg angka 5000 murni.
+    expect(result.remainingDebt).toBe(35000);
+  });
+
+  it('amount_paid garbage ("abc") -> ditolak di level service, bukan nyoba dihitung', async () => {
+    PaymentLogsModel.getDebtTransactionById.mockResolvedValue({
+      transaction_id: 1,
+      customer_id: 1,
+      transaction_date: '2026-01-01',
+      total_price: 40000,
+      total_paid: 0,
+    });
+
+    await expect(
+      PaymentLogService.payDebt(req, { transaction_id: 1, amount_paid: 'abc' })
+    ).rejects.toThrow('amount_paid harus lebih dari 0.');
+  });
+
   it('debt gak ketemu -> throw, gak masuk withTransaction', async () => {
     PaymentLogsModel.getDebtTransactionById.mockResolvedValue(null);
 
@@ -184,6 +217,68 @@ describe('paymentLogService.payDebt', () => {
     expect(CustomerBalanceService.reduceCustomerBalance).toHaveBeenCalledWith(
       req,
       { customer_id: 1, balanceUsed: 12000 },
+      { fakeConn: true }
+    );
+  });
+
+  it('BUG KRITIS: saldo LEBIH dari sisa hutang + admin JUGA input tunai -> saldo akhir gak boleh dobel dihitung', async () => {
+    // Skenario nyata: saldo pelanggan 100.000, sisa hutang cuma 40.000 (saldo aja
+    // udah lebih dari cukup), tapi admin JUGA masukin bayar tunai 5.000 (mis. gak
+    // sadar saldonya udah cukup). Uang yang beneran ada di sistem: 100.000 (saldo
+    // lama) + 5.000 (tunai baru) = 105.000. Abis bayar hutang 40.000, SISA yang
+    // harusnya balik jadi saldo = 105.000 - 40.000 = 65.000 - BUKAN 125.000.
+    CustomerBalanceService.getCustomerBalanceById.mockResolvedValue({ balance: 100000 });
+    PaymentLogsModel.getDebtTransactionById.mockResolvedValue({
+      transaction_id: 1,
+      customer_id: 1,
+      transaction_date: '2026-01-01',
+      total_price: 40000,
+      total_paid: 0,
+    });
+
+    const result = await PaymentLogService.payDebt(req, {
+      transaction_id: 1,
+      amount_paid: 5000,
+    });
+
+    expect(result.remainingDebt).toBe(0);
+    // reduceCustomerBalance ngurangin PERSIS sebanyak yang kepake buat nutupin hutang
+    expect(CustomerBalanceService.reduceCustomerBalance).toHaveBeenCalledWith(
+      req,
+      { customer_id: 1, balanceUsed: 40000 },
+      { fakeConn: true }
+    );
+    // updateCustomerBalance nambahin CUMA porsi tunai yang gak kepake (5000) -
+    // BUKAN 65000 (yang bakal nge-dobel sisa saldo lama yang udah "ketinggal"
+    // otomatis abis di-reduce di atas: 100000-40000=60000, kalau ditambah lagi
+    // 65000 jadi 125000 - uang nongol dari udara).
+    expect(CustomerBalanceService.updateCustomerBalance).toHaveBeenCalledWith(
+      req,
+      { customer_id: 1, balance: 5000 },
+      { fakeConn: true }
+    );
+  });
+
+  it('saldo PAS sama sisa hutang (gak lebih gak kurang) + tunai jadi murni kelebihan', async () => {
+    CustomerBalanceService.getCustomerBalanceById.mockResolvedValue({ balance: 40000 });
+    PaymentLogsModel.getDebtTransactionById.mockResolvedValue({
+      transaction_id: 1,
+      customer_id: 1,
+      transaction_date: '2026-01-01',
+      total_price: 40000,
+      total_paid: 0,
+    });
+
+    await PaymentLogService.payDebt(req, { transaction_id: 1, amount_paid: 3000 });
+
+    expect(CustomerBalanceService.reduceCustomerBalance).toHaveBeenCalledWith(
+      req,
+      { customer_id: 1, balanceUsed: 40000 },
+      { fakeConn: true }
+    );
+    expect(CustomerBalanceService.updateCustomerBalance).toHaveBeenCalledWith(
+      req,
+      { customer_id: 1, balance: 3000 },
       { fakeConn: true }
     );
   });

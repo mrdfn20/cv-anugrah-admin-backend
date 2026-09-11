@@ -16,9 +16,16 @@ const TransactionService = {
       gallon_returned,
       transaction_type,
       armada_id,
-      payment_amount,
       transaction_date, // opsional - lihat catatan di transactionsModel.js insertTransaction
     } = transactionData.body;
+
+    // 🛡️ Konversi eksplisit ke Number - controller udah validasi payment_amount lewat
+    // parseFloat(), TAPI itu cuma validasi, req.body.payment_amount ASLINYA gak diubah.
+    // Kalau ada caller lain (bukan UI resmi, misal panggilan API langsung) yang ngirim
+    // payment_amount sbg STRING, `amount_paid += payment_amount` di bawah bakal jadi
+    // PENGGABUNGAN TEKS (bukan penjumlahan) - "15000" + "5000" = "150005000", bukan
+    // 20000. Dipaksa jadi Number di sini biar aman dari sumber manapun.
+    const payment_amount = Number(transactionData.body.payment_amount) || 0;
 
     // 1️⃣ Ambil harga galon otomatis dari pelanggan
     const gallonPriceData = await GallonService.getGallonPriceByCustomerId(
@@ -57,8 +64,14 @@ const TransactionService = {
       amount_paid = total_price;
     }
 
+    // 🐛 BUG ditemuin user (2026-09-11): dulu `amount_paid === total_price` (PERSIS
+    // sama doang) - transaksi yang OVERPAY (amount_paid > total_price, misal saldo lama
+    // + bayar tunai gabungannya lebih dari total_price) gak pernah ke-upgrade jadi
+    // Tunai, nyangkut terus sebagai "Hutang" padahal udah lunas + ada kelebihan.
+    // Akibatnya nongol di halaman Hutang dengan sisa hutang NEGATIF (membingungkan).
+    // README/dokumentasi udah bilang syaratnya ">=", bukan "===".
     let finalTransactionType = transaction_type;
-    if (transaction_type === 'Hutang' && amount_paid === total_price) {
+    if (transaction_type === 'Hutang' && amount_paid >= total_price) {
       finalTransactionType = 'Tunai';
     }
 
@@ -106,8 +119,10 @@ const TransactionService = {
 
       let newPaymentResult = null;
 
-      // 6️⃣ Catat ke payment_logs jika hutang
-      if (finalTransactionType === 'Hutang' && amount_paid >= 0) {
+      // 6️⃣ Catat ke payment_logs HANYA kalau transaksinya BENERAN masih "Hutang" (ada
+      // sisa yang belum dibayar) - transaksi yang ke-upgrade jadi "Tunai" (lunas/overpay)
+      // gak punya hutang buat dicatat.
+      if (finalTransactionType === 'Hutang') {
         newPaymentResult = await PaymentLogService.addPaymentLogs(
           transactionData,
           {
@@ -119,16 +134,21 @@ const TransactionService = {
           },
           conn
         );
+      }
 
-        // 7️⃣ Jika ada kelebihan, simpan sebagai saldo
-        const extraBalance = amount_paid - total_price;
-        if (extraBalance > 0) {
-          await CustomerBalanceService.updateCustomerBalance(
-            transactionData,
-            { customer_id, balance: extraBalance },
-            conn
-          );
-        }
+      // 7️⃣ Kelebihan bayar (amount_paid > total_price) masuk saldo - DILETAKKAN DI
+      // LUAR blok "Hutang" di atas (dulu nyantol DI DALAM situ, ikut bug yang sama:
+      // begitu === dibenerin jadi >=, transaksi overpay ke-upgrade jadi "Tunai" dan
+      // kelebihannya jadi gak pernah ke-kredit sama sekali kalau blok ini tetap
+      // digantungin ke finalTransactionType === 'Hutang'). Buat transaksi yang TETAP
+      // "Hutang" (amount_paid < total_price by construction), ini selalu 0 (no-op).
+      const extraBalance = Math.max(amount_paid - total_price, 0);
+      if (extraBalance > 0) {
+        await CustomerBalanceService.updateCustomerBalance(
+          transactionData,
+          { customer_id, balance: extraBalance },
+          conn
+        );
       }
 
       return { transactionId: newTransactionId, paymentResult: newPaymentResult };
@@ -167,11 +187,14 @@ const TransactionService = {
 
     if (paymentResult) {
       response.paymentLogId = paymentResult.insertId;
+    }
 
-      const extraBalance = amount_paid - total_price;
-      if (extraBalance > 0) {
-        response.extraBalance = { customer_id, balance: extraBalance };
-      }
+    // Sama kayak di dalam withTransaction - dicek independen dari paymentResult (yang
+    // sekarang cuma keisi kalau transaksinya TETAP Hutang), soalnya kelebihan bayar bisa
+    // kejadian juga di transaksi yang ke-upgrade jadi Tunai (paymentResult-nya null).
+    const extraBalance = Math.max(amount_paid - total_price, 0);
+    if (extraBalance > 0) {
+      response.extraBalance = { customer_id, balance: extraBalance };
     }
 
     return response;
