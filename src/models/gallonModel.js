@@ -137,9 +137,6 @@ const Gallon = {
       query += ` ASC`; // Default order
     }
 
-    console.log(query);
-    console.log(queryParams);
-
     const [results] = await dbConnection.promise().execute(query, queryParams);
     return results;
   },

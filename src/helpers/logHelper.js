@@ -70,8 +70,6 @@ const getPreviousData = async (req) => {
   }
 
   if (url.includes('/customers')) {
-    console.log('masuk ke block if customers');
-
     const { id } = req.params;
     if (!id) return null;
 

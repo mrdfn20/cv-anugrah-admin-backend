@@ -17,8 +17,19 @@ export const addCustomerBalance = async (req, res) => {
   try {
     const { customer_id, balance } = req.body;
 
+    // 🛡️ Ditemuin lewat audit (2026-09-11): dulu `balance` di endpoint ini SAMA SEKALI
+    // gak divalidasi (beda dari PUT /customerbalance & /set yang udah benar), padahal
+    // route ini kebuka buat Admin/Editor/Driver. Gak dipanggil dari UI manapun saat ini
+    // (cuma dipakai internal, selalu balance:0 - lihat paymentLogService.js), tapi tetap
+    // dikunci di sini biar aman dari panggilan API langsung/masa depan.
     if (!customer_id || isNaN(customer_id)) {
       return validationErrorResponse(res, ['Invalid customer ID']);
+    }
+    if (balance === undefined || balance === null || isNaN(balance)) {
+      return validationErrorResponse(res, ['Invalid balance']);
+    }
+    if (balance < 0) {
+      return validationErrorResponse(res, ['Balance cannot be negative']);
     }
 
     const customer = await CustomersService.getCustomerById(customer_id);
