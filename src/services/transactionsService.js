@@ -183,6 +183,13 @@ const TransactionService = {
       gallonPrice,
       transaction_type: finalTransactionType,
       amount_paid,
+      // 🐛 Bug ditemuin user (2026-09-11) via testing: badge biru "Driver" gak muncul
+      // di baris transaksi yang BARU DIBUAT (tanpa refresh halaman) - frontend nge-insert
+      // response addTransaction ini LANGSUNG ke list lokal (bukan refetch), tapi response-nya
+      // dulu gak nyertain created_by_role/created_by_user_id sama sekali. Query LIST/FILTER
+      // (t.*) udah bener nyertain kolom ini - cuma respons endpoint CREATE ini yang kurang.
+      created_by_role: transactionData.user?.role || null,
+      created_by_user_id: transactionData.user?.id || null,
     };
 
     if (paymentResult) {

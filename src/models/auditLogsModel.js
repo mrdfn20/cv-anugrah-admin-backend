@@ -59,7 +59,13 @@ class AuditLogsModel {
       ${whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : ''}
     `;
 
-    let query = `SELECT audit_logs.* ${fromAndWhere} ORDER BY audit_logs.timestamp DESC`;
+    // 🐛 Bug ditemuin user (2026-09-11): dulu cuma `audit_logs.*` - JOIN ke `users` di atas
+    // CUMA kepake buat filter `search` (username LIKE), gak pernah dibalikin ke response.
+    // Frontend jadinya resolve nama user via lookup TERPISAH (GET /user, Admin-only) -
+    // begitu Editor (yang sekarang juga boleh buka Audit Log) buka halaman ini, lookup itu
+    // ketolak 403, jadi nama sendiri (bukan Admin) kadang nongol sbg "#14" bukan username.
+    // Disertain langsung di sini, jalan buat role manapun yang boleh baca /auditlogs.
+    let query = `SELECT audit_logs.*, u.username ${fromAndWhere} ORDER BY audit_logs.timestamp DESC`;
     const selectParams = [...queryParams];
 
     let total = null;

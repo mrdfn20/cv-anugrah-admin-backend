@@ -113,15 +113,25 @@ export const addTransaction = async (req, res) => {
       gallon_empty: parseInt(gallon_empty),
       gallon_returned: parseInt(gallon_returned),
       armada_id: parseInt(armada_id),
-      // transaction_date disimpan via SQL NOW() saat INSERT (bukan hasil query balik) -
-      // format waktu sekarang dgn cara yg sama persis kayak getTransactionsByFilter,
-      // supaya baris yg baru ditambahkan ke tabel FE (tanpa reload) punya tanggal yg benar,
-      // bukan kosong/undefined.
-      transaction_date: moment().tz('Asia/Jakarta').format('YYYY-MM-DD'),
+      // transaction_date disimpan via SQL NOW()/COALESCE(?, NOW()) saat INSERT (bukan
+      // hasil query balik) - dibentuk ulang di sini biar baris yg baru ditambahkan ke
+      // tabel FE (tanpa reload) punya tanggal yg benar, bukan kosong/undefined.
+      // 🐛 Bug ditemuin user (2026-09-11): dulu SELALU pakai moment() (hari ini),
+      // walau user backdate transaksinya (field transaction_date di form Tambah
+      // Transaksi) - baris yg baru ditambah nampilin tanggal SALAH (hari ini, bukan
+      // tanggal yg dipilih) sampai halaman di-refresh manual.
+      transaction_date: req.body.transaction_date
+        ? req.body.transaction_date
+        : moment().tz('Asia/Jakarta').format('YYYY-MM-DD'),
       created_at: moment
         .utc(results.created_at)
         .tz('Asia/Jakarta')
         .format('YYYY-MM-DD HH:mm:ss'),
+      // 🐛 Bug ditemuin user (2026-09-11): badge biru "Driver" gak muncul di baris yg
+      // baru ditambahkan (tanpa refresh) - response ini dulu gak nyertain field ini
+      // sama sekali, padahal query LIST/FILTER (t.*) udah bener nyertainnya.
+      created_by_role: results.created_by_role || null,
+      created_by_user_id: results.created_by_user_id || null,
       ...(results.paymentLogId && {
         paymentLogId: results.paymentLogId,
       }),
