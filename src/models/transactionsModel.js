@@ -237,14 +237,17 @@ const Transactions = {
       WHERE ${whereClauses.join(' AND ')}
     `;
 
+    // `t.id` dipasang sbg tie-breaker kedua - banyak transaksi share transaction_date yang
+    // SAMA (puluhan per hari), jadi ORDER BY transaction_date doang gak deterministik: MySQL
+    // bisa ngembaliin urutan baris yang beda2 antar query LIMIT/OFFSET yang sama persis, bikin
+    // satu id nongol di 2 halaman infinite scroll sekaligus (duplicate id -> keyed {#each} di
+    // TransactionTable/TransactionCard crash -> halaman blank/infinite loading).
+    const direction = sortOrder === 'ASC' || sortOrder === 'DESC' ? ` ${sortOrder}` : '';
     let orderByClause = '';
     if (!sortBy || sortBy === 'transaction_date') {
-      orderByClause = ' ORDER BY t.transaction_date';
+      orderByClause = ` ORDER BY t.transaction_date${direction}, t.id${direction}`;
     } else if (sortBy === 'customer_name') {
-      orderByClause = ' ORDER BY c.customer_name';
-    }
-    if (sortOrder === 'ASC' || sortOrder === 'DESC') {
-      orderByClause += ` ${sortOrder}`;
+      orderByClause = ` ORDER BY c.customer_name${direction}, t.id${direction}`;
     }
 
     // total_paid/remaining_debt dihitung LIVE dari payment_logs (bukan kolom
