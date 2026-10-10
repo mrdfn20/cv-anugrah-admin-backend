@@ -132,11 +132,15 @@ const PaymentLogs = {
       status,
     });
 
-    let orderByClause = ' ORDER BY t.transaction_date';
+    // `t.id` sbg tie-breaker kedua - banyak transaksi share transaction_date/remaining_debt
+    // yang sama persis, jadi ORDER BY kolom itu doang gak deterministik buat LIMIT/OFFSET
+    // (lihat catatan panjang di transactionsModel.js - bug yang sama bikin baris duplikat
+    // nongol di 2 halaman infinite scroll sekaligus).
+    const direction = sortOrder === 'DESC' ? ' DESC' : ' ASC';
+    let orderByClause = ` ORDER BY t.transaction_date${direction}, t.id${direction}`;
     if (sortBy === 'remaining_debt') {
-      orderByClause = ' ORDER BY remaining_debt';
+      orderByClause = ` ORDER BY remaining_debt${direction}, t.id${direction}`;
     }
-    orderByClause += sortOrder === 'DESC' ? ' DESC' : ' ASC';
 
     let query = coreSelect + orderByClause;
     const selectParams = [...queryParams];

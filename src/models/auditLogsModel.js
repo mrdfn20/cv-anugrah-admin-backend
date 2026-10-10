@@ -65,7 +65,11 @@ class AuditLogsModel {
     // begitu Editor (yang sekarang juga boleh buka Audit Log) buka halaman ini, lookup itu
     // ketolak 403, jadi nama sendiri (bukan Admin) kadang nongol sbg "#14" bukan username.
     // Disertain langsung di sini, jalan buat role manapun yang boleh baca /auditlogs.
-    let query = `SELECT audit_logs.*, u.username ${fromAndWhere} ORDER BY audit_logs.timestamp DESC`;
+    // `audit_logs.id` sbg tie-breaker kedua - banyak log share timestamp yang sama persis
+    // (aksi beruntun cepat), jadi ORDER BY timestamp doang gak deterministik buat LIMIT/OFFSET
+    // (lihat catatan panjang di transactionsModel.js - bug yang sama bikin baris duplikat
+    // nongol di 2 halaman infinite scroll sekaligus).
+    let query = `SELECT audit_logs.*, u.username ${fromAndWhere} ORDER BY audit_logs.timestamp DESC, audit_logs.id DESC`;
     const selectParams = [...queryParams];
 
     let total = null;
