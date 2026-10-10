@@ -6,23 +6,39 @@ const Customer = {
    * @param {Function} callback - Callback function untuk menangani hasil query
    */
   getAllCustomers: (callback) => {
+    // 🐛 Bug ditemuin user (2026-10-10): total_debt dulu dihitung dari `t.payment_amount`
+    // (kolom beku, diisi SEKALI pas transaksi dibuat, gak pernah di-update lagi) - padahal
+    // SEMUA pembayaran hutang (tombol "Bayar Hutang" normal, ATAUPUN koreksi data historis)
+    // dicatat di tabel `payment_logs`, bukan nulis ulang kolom itu. Hasilnya: pelanggan yang
+    // hutangnya udah lunas lewat payment_logs tetep keitung penuh di sini, padahal halaman
+    // detail pelanggan (yang emang udah bener, ngitung live dari payment_logs) nunjukin udah
+    // lunas. Disamain ke pola yang sama kayak transactionsModel.js/paymentLogsModel.js:
+    // remaining_debt per transaksi dihitung live, di-clamp ke 0 (transaksi yang overpay gak
+    // boleh "ngurangin" hutang transaksi lain), baru dijumlah.
     const query = `SELECT cst.*,
                     gp.price,
                     sr.sub_region_name,
                     r.region_name,
                     COALESCE(cb.balance, 0) AS balance,
-                    COALESCE((
-                      SELECT SUM(t.total_price - t.payment_amount)
-                      FROM transactions t
-                      WHERE t.customer_id = cst.id
-                        AND t.transaction_type = 'Hutang'
-                        AND t.deleted_at IS NULL
-                    ), 0) AS total_debt
+                    COALESCE(debt.total_debt, 0) AS total_debt
                     FROM customers cst
                     LEFT JOIN gallon_prices gp ON cst.gallon_price_id = gp.id
                     LEFT JOIN sub_regions sr ON cst.sub_region_id = sr.id
                     LEFT JOIN regions r ON sr.region_id = r.id
                     LEFT JOIN customer_balances cb ON cb.customer_id = cst.id
+                    LEFT JOIN (
+                      SELECT t.customer_id,
+                             SUM(GREATEST(t.total_price - COALESCE(pl.paid, 0), 0)) AS total_debt
+                      FROM transactions t
+                      LEFT JOIN (
+                        SELECT transaction_id, SUM(amount_paid) AS paid
+                        FROM payment_logs
+                        WHERE deleted_at IS NULL
+                        GROUP BY transaction_id
+                      ) pl ON pl.transaction_id = t.id
+                      WHERE t.transaction_type = 'Hutang' AND t.deleted_at IS NULL
+                      GROUP BY t.customer_id
+                    ) debt ON debt.customer_id = cst.id
                     WHERE cst.deleted_at IS NULL`;
     dbConnection.query(query, (err, results) => {
       if (err) return callback(err, null);
@@ -37,13 +53,18 @@ const Customer = {
    */
 
   getCustomerById: async (id) => {
+    // Sama kayak catatan di getAllCustomers() di atas - total_debt dihitung live dari
+    // payment_logs (bukan kolom t.payment_amount yang beku), di-clamp 0 per transaksi.
     const query = `SELECT cst.*,
                     gp.price,
                     sr.sub_region_name,
                     r.region_name,
                     COALESCE(cb.balance, 0) AS balance,
                     COALESCE((
-                      SELECT SUM(t.total_price - t.payment_amount)
+                      SELECT SUM(GREATEST(t.total_price - COALESCE((
+                        SELECT SUM(pl.amount_paid) FROM payment_logs pl
+                        WHERE pl.transaction_id = t.id AND pl.deleted_at IS NULL
+                      ), 0), 0))
                       FROM transactions t
                       WHERE t.customer_id = cst.id
                         AND t.transaction_type = 'Hutang'
